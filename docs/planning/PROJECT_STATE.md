@@ -9,12 +9,12 @@ control plane) to understand where the project stands.
 
 PROJECT:                JOURDAIN EMPLOI
 AISE PHASE:             S3 — NEW PROJECT BOOTSTRAP
-STATUS:                 CLOSED PASS
+STATUS:                 CLOSED PASS — BOOTSTRAP CANONICAL READY
 CANONICAL BRANCH:       main
-CANONICAL HEAD:         <sha after baseline commit — see Git log>
-REMOTE:                 configured (origin → github.com/alexkanga/jourdain.git)
-REMOTE HEAD:            <sha after push — see Git log>
-LOCAL = REMOTE:         YES (after S3 push)
+CANONICAL HEAD:         df9118a4b98313133b783b304062e9c3a3762654
+REMOTE:                 configured (origin → git@github.com-aise-alexkanga-jourdain:alexkanga/jourdain.git)
+REMOTE HEAD:            df9118a4b98313133b783b304062e9c3a3762654
+LOCAL = REMOTE:         YES
 AISE SOURCE COMMIT:     2991df51c1fa692f892452c361081c626f028cd0
 COMPLETED COMPONENTS:   S0, S1, S2, S3 installed and canonical
 PRODUCT DISCOVERY:      NOT STARTED (S4)
