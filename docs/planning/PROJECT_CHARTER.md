@@ -34,14 +34,18 @@ The opportunity is to deliver real, working value with the smallest possible sur
 
 ## 3. Users / Stakeholders
 
-Two distinct user groups are confirmed for V1:
+Two distinct ordinary user groups are confirmed for V1:
 
 1. **Administration JOURDAIN EMPLOI** — the team responsible for recording, managing, and publishing job offers. [CONFIRMED]
 2. **Public visitors** — anyone who consults the published offers without authentication. [CONFIRMED]
 
-No other user group is in scope for V1. Specifically, the following are explicitly excluded (see Section 8 — Out of Scope): candidates with accounts, recruiters with dedicated spaces, partners, advertisers. [CONFIRMED]
+No other ordinary user group is in scope for V1. Specifically, the following are explicitly excluded (see Section 8 — Out of Scope): candidates with accounts, recruiters with dedicated spaces, partners, advertisers. [CONFIRMED]
 
-The exact number of administrative users, their roles, and the granularity of permissions among administrators is not specified by OWNER. [OPEN QUESTION — Q1]
+In addition to ordinary users, the project must include a dedicated **system principal** called **Fantomas** (the JOURDAIN EMPLOI instantiation of the AISE canonical Ghost/Fantomas break-glass principal mandated by S0 §14 and S0 §21). [CONFIRMED]
+
+Fantomas is NOT an ordinary user. Fantomas is a special system principal distinct from the administrative users and must not be treated as a simple ADMIN account. Fantomas serves the bootstrap, recovery, and break-glass functions required by AISE. The functional role, capabilities, and lifecycle of Fantomas are described in Section 7. [CONFIRMED]
+
+The exact number of ordinary administrative users, their roles, and the granularity of permissions among ordinary administrators is not specified by OWNER. [OPEN QUESTION — Q1]
 
 ## 4. Current State / Pain Points
 
@@ -81,6 +85,40 @@ The V1 scope covers the following functional areas:
 - Suspension of a published offer. [CONFIRMED]
 - Archiving of an offer. [CONFIRMED]
 - Consultation of the administrative list of offers (all statuses). [CONFIRMED]
+
+**System principal — Fantomas (Ghost/Fantomas break-glass principal):**
+
+JOURDAIN EMPLOI V1 must include a dedicated system principal named **Fantomas**, instantiating the AISE canonical Ghost/Fantomas break-glass principal mandated by S0 §14 (FANTOMAS / GHOST) and S0 §21 (FANTOMAS PRIVILEGE INHERITANCE). [CONFIRMED]
+
+Functional identity (OWNER-confirmed):
+- Principal name: **Fantomas**. [CONFIRMED]
+- Initial login identifier: **Fantomas** (used at bootstrap time). [CONFIRMED]
+- Initial bootstrap credential: OWNER has specified an initial password scheme. The literal password value is **NOT recorded in this repository** (per S0 §13 Secret Handling — frozen rule). The literal value will be injected at implementation time through the S0 §25 External Parameter Gate via a secure channel (secret manager / environment variable / deployment-time configuration), and must be rotated upon first use. [CONFIRMED — requirement; the literal secret is OUT of repository scope]
+
+Functional role and capabilities (OWNER-confirmed, per AISE §14 and §21):
+- Fantomas is the highest-privileged system principal of JOURDAIN EMPLOI. [CONFIRMED]
+- Fantomas has at minimum all the capabilities of the future SUPER_ADMIN role. [CONFIRMED]
+- Fantomas additionally retains the bootstrap, recovery, and break-glass capabilities mandated by AISE §14. [CONFIRMED]
+- Fantomas is distinct from ordinary ADMIN users and must not be treated as a simple administrative account. [CONFIRMED]
+- Fantomas remains usable for exceptional system operations per AISE doctrine (bootstrap of the first privileged administrator, recovery when the ordinary authentication path or its primary dependency is unavailable, controlled emergency administrative access). [CONFIRMED]
+
+Privilege inheritance (per AISE §21, OWNER-confirmed as applicable to JOURDAIN EMPLOI):
+- Every operation authorized for SUPER_ADMIN must also be authorized for Fantomas. [CONFIRMED]
+- SUPER_ADMIN does not automatically inherit Fantomas-only capabilities. [CONFIRMED]
+- The distinction between effective SUPER_ADMIN capabilities and Fantomas identity is preserved. [CONFIRMED]
+
+V1 ordinary interface (OWNER-confirmed):
+- The V1 ordinary interface is NOT complexified with multiple roles. [CONFIRMED]
+- The ordinary daily role remains a single **ADMIN** role. [CONFIRMED]
+- Fantomas remains a special system principal, distinct from ordinary administrative users, and is not exposed as a regular role in the day-to-day interface. [CONFIRMED]
+
+Design treatment (forward references to later AISE stages — NOT specified in S4):
+- Functional requirements and expected behavior of Fantomas: S5. [CONFIRMED — routing decision]
+- Authentication and authorization architecture for Fantomas: S6. [CONFIRMED — routing decision]
+- Canonical technical decision / ADR if needed: S7. [CONFIRMED — routing decision]
+- Work Package then implementation: S9 / S10. [CONFIRMED — routing decision]
+
+S4 does NOT specify the technical implementation of Fantomas (no auth scheme, no password hashing algorithm, no session model, no database schema, no API). S4 records the functional requirement and the AISE mandate. Technical decisions are deferred to S6/S7. [CONFIRMED — S4 boundary]
 
 **Public portal (unauthenticated):**
 - Consultation of the list of published offers. [CONFIRMED]
@@ -165,7 +203,9 @@ These preferences are recorded as inputs for S6 (Technical Specification). S4 do
 **Process constraints:**
 - All engineering work must follow AISE S0–S14 + R1–R7 protocols. [CONFIRMED]
 - AISE FROZEN rules apply: §24 Contract Preservation, §25 External Parameter Gate. [CONFIRMED]
-- Zero scheduled work by default (S0 §23): no cron, no background monitoring, no recurring tasks without explicit OWNER authorization. [CONFIRMED]
+- AISE §13 Secret Handling (frozen): no passwords, tokens, database URLs, private keys, or production credentials may be stored in repository files. The Fantomas bootstrap password is therefore not recorded in this charter; its literal value will be injected via §25 at implementation time. [CONFIRMED]
+- AISE §14 / §21 Ghost/Fantomas: JOURDAIN EMPLOI must include a Fantomas system principal with the capabilities and privilege inheritance semantics mandated by these sections. [CONFIRMED]
+- AISE §23 (Zero Scheduled Work): no cron, no background monitoring, no recurring tasks without explicit OWNER authorization. [CONFIRMED]
 
 **Priority order (OWNER-confirmed):**
 1. Simplicity of use. [CONFIRMED]
@@ -194,7 +234,7 @@ All ASSUMPTION items in this charter, listed for OWNER review:
 | A4 | The application's UI language is French. | 10. Constraints |
 | A5 | GDPR compliance is required. | 10. Constraints |
 | A6 | The application is mono-tenant — a single JOURDAIN EMPLOI instance, not a multi-organization platform. | 9. Project Boundary (implicit) |
-| A7 | The administration team is small (single-digit administrators); no fine-grained permission model is required in V1. | 3. Users / Stakeholders |
+| A7 | The ordinary administration team is small (single-digit administrators); no fine-grained permission model is required in V1 for ordinary admins (the single ordinary daily role is ADMIN). This assumption does NOT apply to Fantomas, whose role and capabilities are CONFIRMED in Section 7. | 3. Users / Stakeholders |
 
 Each ASSUMPTION will remain ASSUMPTION in the final charter unless OWNER explicitly confirms or corrects it. The agent must not upgrade ASSUMPTION to CONFIRMED silently (S4 §10 No silent promotion).
 
@@ -231,10 +271,12 @@ Quantitative success criteria (number of offers supported, page load time, uptim
 | Scope creep toward a recruitment platform | Medium | High | The V1 boundary is firm (Section 8); any drift risks turning a small project into a large one. |
 | Undefined success metrics | High | Medium | Without quantitative targets, "success" is subjective. See Q3. |
 | Undefined "source offer" concept | Medium | Medium | OWNER mentions "offre source" in data rules; if offers come from external sources, an import process may be needed. See Q4. |
-| Undefined administrative roles | Medium | Low-Medium | If multiple administrators exist, the absence of a permission model may create governance issues. See Q1. |
+| Undefined administrative roles | Medium | Low-Medium | If multiple ordinary administrators exist, the absence of a permission model may create governance issues. See Q1. Fantomas is excluded from this risk (its role is CONFIRMED). |
 | Technical complexity drift | Low | Medium | OWNER preferences (Next.js, Neon, Vercel) are reasonable, but the cumulative complexity must remain proportional to V1 scope. |
 | Data privacy / GDPR | Medium | High | Job offers may contain personal contact information; GDPR compliance assumed required (A5) but not specified. |
 | Hosted dependency on third parties (Vercel, Neon) | Low | Medium | Both are reliable, but an outage or pricing change could affect V1 operation. Acceptable for V1 per OWNER preferences. |
+| Fantomas bootstrap credential mishandling | Medium | High | The initial Fantomas password is OWNER-specified and must not be stored in the repository (S0 §13). If accidentally committed, GitHub Secret Scanning may revoke access; if left unchanged after bootstrap, the system is exposed. Mitigation: rotate on first use, inject via §25 External Parameter Gate. |
+| Fantomas privilege misuse | Low | High | Fantomas has highest privileges; misuse or compromise could compromise the entire system. Mitigation: break-glass use only, audit log, rotation. Technical controls deferred to S6/S7. |
 
 This list is not exhaustive — it captures risks identifiable at charter level. Detailed risk analysis happens in S5/S6.
 
@@ -261,11 +303,13 @@ Summary of evidence states across all charter claims:
 
 | Evidence State | Count (approximate) |
 |----------------|----------------------|
-| CONFIRMED | ~50 (project identity, scope, exclusions, fields, lifecycle, priorities, technical preferences) |
+| CONFIRMED | ~70 (project identity, scope, exclusions, fields, lifecycle, priorities, technical preferences, Fantomas principal identity/role/capabilities/routing) |
 | ASSUMPTION | 7 (A1–A7, listed in Section 11) |
 | OPEN QUESTION | 8 (Q1–Q8, listed in Section 15) |
 
-The charter is dominated by CONFIRMED elements because OWNER has provided a rich, structured input. The ASSUMPTION and OPEN QUESTION items are explicit and surfaced for OWNER review — none are buried.
+The charter is dominated by CONFIRMED elements because OWNER has provided a rich, structured input — including the Fantomas system principal as an additional confirmed requirement. The ASSUMPTION and OPEN QUESTION items are explicit and surfaced for OWNER review — none are buried.
+
+Note on the Fantomas bootstrap credential: the existence of an OWNER-specified initial password is CONFIRMED, but the literal value is intentionally NOT recorded in this repository (per S0 §13). The literal value will be injected via S0 §25 External Parameter Gate at implementation time (S10) through a secure channel.
 
 ---
 
