@@ -8,23 +8,27 @@ control plane) to understand where the project stands.
 ## Current phase
 
 PROJECT:                JOURDAIN EMPLOI
-AISE PHASE:             S3 — NEW PROJECT BOOTSTRAP
-STATUS:                 CLOSED PASS — BOOTSTRAP CANONICAL READY
+AISE PHASE:             S4 — PROJECT DISCOVERY / CHARTER
+STATUS:                 CLOSED PASS — CHARTER APPROVED
+CHARTER APPROVED:       YES
+CHARTER PATH:           docs/planning/PROJECT_CHARTER.md
+CHARTER APPROVAL DATE:  2026-09-13
 CANONICAL BRANCH:       main
-CANONICAL HEAD:         df9118a4b98313133b783b304062e9c3a3762654
+CANONICAL HEAD:         fa377c1feba5a111c07e0f40d094245fdadc727d
 REMOTE:                 configured (origin → git@github.com-aise-alexkanga-jourdain:alexkanga/jourdain.git)
-REMOTE HEAD:            df9118a4b98313133b783b304062e9c3a3762654
+REMOTE HEAD:            fa377c1feba5a111c07e0f40d094245fdadc727d
 LOCAL = REMOTE:         YES
 AISE SOURCE COMMIT:     2991df51c1fa692f892452c361081c626f028cd0
-COMPLETED COMPONENTS:   S0, S1, S2, S3 installed and canonical
-PRODUCT DISCOVERY:      NOT STARTED (S4)
+COMPLETED COMPONENTS:   S0, S1, S2, S3, S4 installed and canonical
+PRODUCT DISCOVERY:      CLOSED PASS — CHARTER APPROVED (S4)
 PRODUCT REQUIREMENTS:   NOT STARTED (S5)
 TECHNICAL SPECIFICATION: NOT STARTED (S6)
 PROJECT MANIFEST/ADR:   NOT STARTED (S7)
 ROADMAP:                NOT STARTED (S8)
 IMPLEMENTATION:         NOT STARTED (S10)
+DEFERRED DECISIONS:     D1 (GDPR details — S6), D2 (migration scope — only if needed), D3 (data residency — S6). All explicitly non-blocking for S5 or V1.
 NEXT AUTHORIZED:        NONE until OWNER GO
-NEXT RECOMMENDED:       S4 — Project Discovery / Charter
+NEXT RECOMMENDED:       S5 — Product Requirements / Cahier des Charges
 
 ## What exists
 
@@ -34,7 +38,7 @@ NEXT RECOMMENDED:       S4 — Project Discovery / Charter
 - This project state file: `docs/planning/PROJECT_STATE.md`.
 - Minimal README: `README.md`.
 
-## What does NOT exist (intentional, per S3)
+## What does NOT exist (intentional, per S3 and S4 boundaries)
 
 - No application code.
 - No Next.js application scaffolded.
@@ -43,8 +47,22 @@ NEXT RECOMMENDED:       S4 — Project Discovery / Charter
 - No authentication provider configured.
 - No CI/CD pipeline.
 - No scheduled work, cron, or background automation (S0 §23 default).
-- No product charter, no product requirements, no technical
-  specification, no ADRs.
+- No product requirements document (S5 — next recommended stage).
+- No technical specification (S6).
+- No project manifest / ADRs (S7).
+- No roadmap (S8).
+- No implementation (S10).
+
+## What exists now (after S4 closure)
+
+- AISE governance control plane: S0–S14 + R1–R7, vendored canonical
+  snapshot from source commit 2991df51c1fa692f892452c361081c626f028cd0.
+- AISE manifest: `docs/engineering/AISE_MANIFEST.md`.
+- This project state file: `docs/planning/PROJECT_STATE.md`.
+- Minimal README: `README.md`.
+- **OWNER-APPROVED PROJECT CHARTER**: `docs/planning/PROJECT_CHARTER.md`
+  (frozen at canonical commit `fa377c1feba5a111c07e0f40d094245fdadc727d`,
+  approved by OWNER on 2026-09-13).
 
 ## OWNER-provided inputs (recorded as-is, evidence for S4/S5/S6)
 
@@ -185,8 +203,8 @@ Architectural constraint (OWNER-stated):
 
 ## Stop contract
 
-S3 is closed. S4 has NOT started. S4 begins only after explicit
-OWNER GO.
+S4 is CLOSED / PASS — CHARTER APPROVED. S5 has NOT started. S5 begins
+only after explicit OWNER GO.
 
-NEXT RECOMMENDED COMPONENT: S4 — Project Discovery / Charter
+NEXT RECOMMENDED COMPONENT: S5 — Product Requirements / Cahier des Charges
 NEXT ACTION: OWNER GO REQUIRED

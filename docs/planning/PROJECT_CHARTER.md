@@ -1,12 +1,13 @@
 # PROJECT CHARTER — JOURDAIN EMPLOI
 
 **Document type:** AISE S4 — Project Discovery / Charter
-**Status:** FINAL DRAFT — READY FOR OWNER APPROVAL
-**Date:** 2026-09-10 (initial draft), 2026-09-13 (finalized after OWNER revision decisions)
+**Status:** OWNER APPROVED — S4 CLOSED / PASS
+**Date:** 2026-09-10 (initial draft), 2026-09-13 (finalized after OWNER revision decisions), 2026-09-13 (OWNER APPROVED)
 **Project:** JOURDAIN EMPLOI
 **Canonical repository:** `github.com/alexkanga/jourdain`
 **Canonical branch:** `main`
-**Canonical HEAD at draft time:** `9b2cabd511dacb1f954e825ed3858ffb7c62fec3`
+**Charter-approved canonical HEAD:** `fa377c1feba5a111c07e0f40d094245fdadc727d`
+**Charter draft HEAD at initial draft time:** `9b2cabd511dacb1f954e825ed3858ffb7c62fec3`
 
 This charter is governed by the AISE protocol S4 (`docs/engineering/AISE_PROJECT_DISCOVERY_CHARTER.md`). It defines **what the project is and why it exists**, not the detailed product requirements (S5) nor the technical architecture (S6).
 
@@ -364,16 +365,21 @@ Verdict: **CHARTER READY FOR OWNER APPROVAL = YES.** All material charter claims
 
 ## Charter Approval
 
-This charter is a **FINAL DRAFT** presented for OWNER review and explicit approval. It is NOT valid until OWNER explicitly approves it.
+**APPROVED BY OWNER on 2026-09-13.**
 
-All previous ASSUMPTION items have been resolved. All previous OPEN QUESTION items have been resolved or reclassified as DEFERRED DECISIONS (not blockers for S5 or V1). The charter is ready for OWNER approval.
+OWNER has explicitly approved this charter at canonical commit `fa377c1feba5a111c07e0f40d094245fdadc727d` with the following acknowledgment:
 
-OWNER may:
-- **Approve** — the charter is frozen and S4 is complete; PROJECT_STATE is updated to S4 CLOSED / PASS — CHARTER APPROVED.
-- **Request changes** — S4 revises and re-presents.
-- **Provide additional information** — S4 incorporates and re-classifies.
+> J'approuve explicitement le PROJECT_CHARTER finalisé de JOURDAIN EMPLOI au commit canonique `fa377c1 — feat(s4): finalize PROJECT_CHARTER for OWNER approval`. Le Charter S4 est APPROUVÉ.
 
-Per AISE S4 §8: an OWNER's absence of objection is NOT approval — explicit acknowledgment is required.
+OWNER-accepted DEFERRED DECISIONS (explicitly not blockers for S5 or V1):
+
+- **D1** — conformité / RGPD détaillé (will be examined in S6)
+- **D2** — éventuelle migration de données existantes (only if OWNER identifies a migration need later)
+- **D3** — résidence / région des données (will be examined in S6)
+
+Per AISE S4 §8, the charter is now FROZEN as the canonical intended state for the project. Any future modification requires a new AISE scope decision (likely a CONTRACT_DIVERGENCE handling or a new S4 revision round).
+
+Per AISE S4 §9, S4 transitions PROJECT_STATE to CLOSED / PASS — CHARTER APPROVED. S5 (Product Requirements / Cahier des Charges) is the next recommended component, to begin only after explicit OWNER GO.
 
 ---
 
