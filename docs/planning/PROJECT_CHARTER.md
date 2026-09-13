@@ -1,8 +1,8 @@
 # PROJECT CHARTER — JOURDAIN EMPLOI
 
 **Document type:** AISE S4 — Project Discovery / Charter
-**Status:** DRAFT — PENDING OWNER APPROVAL
-**Date:** 2026-09-10
+**Status:** FINAL DRAFT — READY FOR OWNER APPROVAL
+**Date:** 2026-09-10 (initial draft), 2026-09-13 (finalized after OWNER revision decisions)
 **Project:** JOURDAIN EMPLOI
 **Canonical repository:** `github.com/alexkanga/jourdain`
 **Canonical branch:** `main`
@@ -15,6 +15,7 @@ Every factual claim in this charter carries one of three evidence states:
 - **CONFIRMED** — directly stated by OWNER, or verifiable from authoritative source.
 - **ASSUMPTION** — reasonable inference consistent with OWNER intent, but not explicitly confirmed. Every ASSUMPTION is presented for OWNER review.
 - **OPEN QUESTION** — materially unresolved, decision-relevant. Every OPEN QUESTION is presented to OWNER with enough context for a decision.
+- **DEFERRED DECISION** — not resolved at S4, but explicitly NOT a blocker for S5 or V1. Will be examined at the appropriate later AISE stage (typically S6 technical specification).
 
 ---
 
@@ -45,13 +46,11 @@ In addition to ordinary users, the project must include a dedicated **system pri
 
 Fantomas is NOT an ordinary user. Fantomas is a special system principal distinct from the administrative users and must not be treated as a simple ADMIN account. Fantomas serves the bootstrap, recovery, and break-glass functions required by AISE. The functional role, capabilities, and lifecycle of Fantomas are described in Section 7. [CONFIRMED]
 
-The exact number of ordinary administrative users, their roles, and the granularity of permissions among ordinary administrators is not specified by OWNER. [OPEN QUESTION — Q1]
+The ordinary administration team is small (single-digit administrators). The V1 ordinary interface uses a single ADMIN role; no complex RBAC is required for V1. The exact number of administrators is not necessary to complete S4 — V1 must support a small administrative team without a mandatory quantitative assumption. [CONFIRMED — OWNER revision decision §4 + §13]
 
 ## 4. Current State / Pain Points
 
-OWNER has not described the current state of job-offer publication at JOURDAIN EMPLOI. Whether offers are currently published via email, social media, PDF, another job board, or not at all is not stated. [OPEN QUESTION — Q2]
-
-The charter therefore records the absence of a dedicated JOURDAIN EMPLOI publication portal as the confirmed motivation, without claiming to replace a specific existing system. [CONFIRMED]
+OWNER has not described the current state of job-offer publication at JOURDAIN EMPLOI. Whether offers are currently published via email, social media, PDF, another job board, or not at all is not stated. This is not a blocker for V1: the V1 charter records the absence of a dedicated JOURDAIN EMPLOI publication portal as the confirmed motivation, without claiming to replace a specific existing system. [CONFIRMED — OWNER revision decision §11 + §14; former Q2 reclassified as DEFERRED DECISION — D2]
 
 ## 5. Vision
 
@@ -70,21 +69,23 @@ V1 must achieve the following outcomes:
 5. The public can open a published offer and read its full detail, including application modalities when available. [CONFIRMED]
 6. The system remains simple to use, correct in operation, secure, maintainable, performant, low-complexity, and low-cost to operate (per the priority order in Section 10). [CONFIRMED]
 
-Measurable success targets (e.g., number of offers supported, page load time, uptime SLO) are not specified by OWNER. [OPEN QUESTION — Q3]
+Measurable success targets: the V1 is primarily functional, not based on quantitative traffic or adoption metrics. Quantitative success criteria (number of offers supported, page load time, uptime SLO, audience metrics) are explicitly NOT required as a V1 delivery condition. The V1 success criteria are functional — see Section 13. [CONFIRMED — OWNER revision decision §11]
 
 ## 7. High-Level Scope
 
 The V1 scope covers the following functional areas:
 
-**Administration back-office (authenticated):**
-- Authentication of the administration. [CONFIRMED]
-- Creation of an offer. [CONFIRMED]
-- Recording of an offer (saving it without publishing). [CONFIRMED]
-- Modification of an offer. [CONFIRMED]
-- Publication of an offer. [CONFIRMED]
-- Suspension of a published offer. [CONFIRMED]
-- Archiving of an offer. [CONFIRMED]
-- Consultation of the administrative list of offers (all statuses). [CONFIRMED]
+**Administration back-office (authenticated, single ordinary role: ADMIN):**
+- Authentication of the administration (login). [CONFIRMED — OWNER revision decision §4]
+- Consultation of the administrative list of offers (all statuses). [CONFIRMED — OWNER revision decision §4]
+- Creation of an offer. [CONFIRMED — OWNER revision decision §4]
+- Recording of an offer (saving it without publishing). [CONFIRMED — OWNER revision decision §4]
+- Modification of an offer. [CONFIRMED — OWNER revision decision §4]
+- Publication of an offer. [CONFIRMED — OWNER revision decision §4]
+- Suspension of a published offer. [CONFIRMED — OWNER revision decision §4]
+- Archiving of an offer. [CONFIRMED — OWNER revision decision §4]
+
+The V1 ordinary interface is intentionally simple: a single ADMIN role, no complex RBAC. [CONFIRMED — OWNER revision decision §4]
 
 **System principal — Fantomas (Ghost/Fantomas break-glass principal):**
 
@@ -120,57 +121,81 @@ Design treatment (forward references to later AISE stages — NOT specified in S
 
 S4 does NOT specify the technical implementation of Fantomas (no auth scheme, no password hashing algorithm, no session model, no database schema, no API). S4 records the functional requirement and the AISE mandate. Technical decisions are deferred to S6/S7. [CONFIRMED — S4 boundary]
 
-**Public portal (unauthenticated):**
-- Consultation of the list of published offers. [CONFIRMED]
-- Opening of a published offer. [CONFIRMED]
-- Consultation of the full detail of an offer. [CONFIRMED]
-- Consultation of the application modalities when they are available. [CONFIRMED]
+**Public portal (unauthenticated) — main user journey:**
+
+The public main journey is: List of published offers → "Voir l'offre" → Read the full detail. [CONFIRMED — OWNER revision decision §5]
+
+- Consultation of the list of published offers. [CONFIRMED — OWNER revision decision §5]
+- Opening a published offer ("Voir l'offre" action). [CONFIRMED — OWNER revision decision §5]
+- Consultation of the full detail of an offer. [CONFIRMED — OWNER revision decision §5]
+- Consultation of the application modalities when they are available. [CONFIRMED — OWNER revision decision §5]
+
+The public does not need an account. [CONFIRMED — OWNER revision decision §5]
 
 **Offer data fields (V1):**
-- Title (required). [CONFIRMED]
-- Description (required). [CONFIRMED]
-- Company (optional). [CONFIRMED]
-- Sector (optional). [CONFIRMED]
-- Category (optional). [CONFIRMED]
-- Contract type (optional). [CONFIRMED]
-- Education level (optional). [CONFIRMED]
-- Experience (optional). [CONFIRMED]
-- Location (optional when unknown). [CONFIRMED]
+
+Required fields:
+- Title (required). [CONFIRMED — OWNER revision decision §16]
+- Description (required). [CONFIRMED — OWNER revision decision §16]
+
+Optional fields (an absent optional field must NOT prevent recording or publishing — see Core data rules below):
+- Company (optional). [CONFIRMED — OWNER revision decision §16]
+- Sector (optional). [CONFIRMED — OWNER revision decision §16]
+- Category (optional). [CONFIRMED — OWNER revision decision §16]
+- Contract type (optional). [CONFIRMED — OWNER revision decision §16]
+- Education level (optional). [CONFIRMED — OWNER revision decision §16]
+- Experience (optional). [CONFIRMED — OWNER revision decision §16]
+- Location (optional, especially when unknown). [CONFIRMED — OWNER revision decision §16]
+- Expiry / closing date (optional). [CONFIRMED — OWNER revision decision §16]
+- Source (optional). When known, the administration can record: source name, source URL. [CONFIRMED — OWNER revision decision §6 + §16]
+- Application modalities / information (optional). [CONFIRMED — OWNER revision decision §16]
 - Publication date. [CONFIRMED]
-- Expiry / closing date (optional). [CONFIRMED]
-- Application modalities (optional). [CONFIRMED]
-- Source (optional). [CONFIRMED]
 
 **Public offer card display** (when data is available): title, company, location, contract type, publication date, expiry date, "Voir l'offre" action. [CONFIRMED]
 
 **Public offer detail display** (when data is available): title, company, main information, dates, full description, application modalities, source. [CONFIRMED]
 
 **Core data rules:**
-- The system must never invent information absent from the source offer. [CONFIRMED]
-- An absent optional field must not prevent publication. [CONFIRMED]
+- The system must never invent information absent from the source offer. [CONFIRMED — OWNER revision decision §16]
+- An absent optional field must not prevent recording or publication. [CONFIRMED — OWNER revision decision §16]
+
+**Offer creation mode:**
+- Offers are created manually by the administration. [CONFIRMED — OWNER revision decision §3]
+- No automatic import or collection mechanism in V1. [CONFIRMED — OWNER revision decision §3 + §6]
+
+**Archiving behavior:**
+- An archived offer is retained in the database. [CONFIRMED — OWNER revision decision §7]
+- No automatic deletion of archived offers in V1. [CONFIRMED — OWNER revision decision §7]
+- A precise retention duration is not required to start V1. [CONFIRMED — OWNER revision decision §7]
 
 ## 8. Out of Scope (V1)
 
 The following are explicitly excluded from V1:
 
-- Company logos. [CONFIRMED]
-- "Apply" button (any kind of in-app application mechanism). [CONFIRMED]
-- Social sharing (Facebook, WhatsApp, LinkedIn, generic share). [CONFIRMED]
-- Candidate accounts. [CONFIRMED]
-- CV / resume upload. [CONFIRMED]
-- Favorites / bookmarks. [CONFIRMED]
-- Messaging (between candidates and administration, or between any users). [CONFIRMED]
-- Internal application (candidates applying through JOURDAIN EMPLOI). [CONFIRMED]
-- Recruiter space (any third-party recruiter features). [CONFIRMED]
-- Payment (any payment functionality). [CONFIRMED]
-- AI matching (between offers and candidates, or any AI-driven recommendation). [CONFIRMED]
-- Mobile application (native iOS/Android). [CONFIRMED]
+- Company logos. [CONFIRMED — OWNER revision decision §17]
+- "Apply" button (any kind of in-app application mechanism). [CONFIRMED — OWNER revision decision §17]
+- Social sharing (Facebook, WhatsApp, LinkedIn, generic share). [CONFIRMED — OWNER revision decision §17]
+- Candidate accounts. [CONFIRMED — OWNER revision decision §17]
+- CV / resume upload. [CONFIRMED — OWNER revision decision §17]
+- Favorites / bookmarks. [CONFIRMED — OWNER revision decision §17]
+- Messaging (between candidates and administration, or between any users). [CONFIRMED — OWNER revision decision §17]
+- Internal application (candidates applying through JOURDAIN EMPLOI). [CONFIRMED — OWNER revision decision §17]
+- Recruiter space (any third-party recruiter features). [CONFIRMED — OWNER revision decision §17]
+- Payment (any payment functionality). [CONFIRMED — OWNER revision decision §17]
+- AI matching (between offers and candidates, or any AI-driven recommendation). [CONFIRMED — OWNER revision decision §17]
+- Mobile application (native iOS/Android). [CONFIRMED — OWNER revision decision §17]
+- Notifications (email, push, SMS, any kind). [CONFIRMED — OWNER revision decision §9 + §17]
+- Automatic import of offers (no automated collection or import pipeline). [CONFIRMED — OWNER revision decision §3 + §17]
+- Public API (no public product API). Internal endpoints required for Next.js operation will be defined in S6 but are NOT a public product API. [CONFIRMED — OWNER revision decision §8 + §17]
+- Multilingual support (V1 is French only). [CONFIRMED — OWNER revision decision §2 + §17]
+- Multi-tenant (V1 is a single application operated by JOURDAIN EMPLOI). [CONFIRMED — OWNER revision decision §1 + §17]
+- Complex RBAC (V1 uses a single ordinary ADMIN role; Fantomas is the only other principal and is governed by AISE §14/§21). [CONFIRMED — OWNER revision decision §4 + §17]
 
 These items are excluded from V1 by OWNER decision. They are not "future scope that may slip in" — they are explicit boundaries. Any future re-introduction of one of these items requires OWNER approval and a new AISE scope decision (likely a new S4 round or a CONTRACT_DIVERGENCE handling).
 
 ## 9. Project Boundary
 
-V1 of JOURDAIN EMPLOI is a self-contained web portal. [CONFIRMED]
+V1 of JOURDAIN EMPLOI is a self-contained, mono-tenant web portal operated by JOURDAIN EMPLOI. [CONFIRMED — OWNER revision decision §1]
 
 **Where the project begins:**
 - The web application that the administration uses to manage offers.
@@ -180,9 +205,10 @@ V1 of JOURDAIN EMPLOI is a self-contained web portal. [CONFIRMED]
 
 **Where the project ends:**
 - No integration with external recruitment systems in V1. [CONFIRMED]
-- No syndication, RSS, or public API in V1. [ASSUMPTION — A1: no public read API is required for V1.]
-- No import pipeline from external job boards in V1. [ASSUMPTION — A2: offers are entered manually by the administration. OWNER mentions "offre source" in the data rules, which suggests offers may originate from an external source; the mechanism by which an offer enters the system is unspecified. See Q4.]
-- No outbound notifications (email, push, SMS) in V1. [ASSUMPTION — A3: based on the V1 scope and exclusions list which does not mention notifications.]
+- No syndication, RSS, or public API in V1. Internal endpoints required for Next.js operation are NOT a public product API and will be defined in S6. [CONFIRMED — OWNER revision decision §8]
+- No import pipeline from external job boards in V1. Offers are entered manually by the administration. [CONFIRMED — OWNER revision decision §3 + §6]
+- No outbound notifications (email, push, SMS) in V1. [CONFIRMED — OWNER revision decision §9]
+- No multilingual support in V1. [CONFIRMED — OWNER revision decision §2]
 
 ## 10. Constraints
 
@@ -219,24 +245,35 @@ These preferences are recorded as inputs for S6 (Technical Specification). S4 do
 When two priorities conflict, the lower-numbered priority wins. This ordering is a confirmed governance rule for V1 decisions.
 
 **Regulatory / language:**
-- The charter is written in French (OWNER's working language). The application's UI language is assumed French. [ASSUMPTION — A4]
-- GDPR compliance is assumed required given the handling of potentially personal data (e.g., contact information in application modalities) and the operating geography. [ASSUMPTION — A5]
+- The charter is written in French (OWNER's working language). The V1 application UI is French only. Multilingual support is out of scope for V1. [CONFIRMED — OWNER revision decision §2]
+- GDPR compliance: the handling of potentially personal data (e.g., contact information in application modalities) is acknowledged. Detailed GDPR and data-residency constraints are NOT a blocker for S4 or V1 functional scope; they will be examined at the appropriate technical stage (S6). [CONFIRMED — OWNER revision decision §14; former A5 / Q8 reclassified as DEFERRED DECISION — D1/D3]
+
+**Operational mode:**
+- V1 is a single application operated by JOURDAIN EMPLOI (mono-tenant). [CONFIRMED — OWNER revision decision §1]
+
+**Volumetry:**
+- Exact volumetry is not known today. V1 starts with a normal editorial job-offer portal volumetry — no quantitative capacity assumption is required. S6 will choose a simple architecture that can evolve without premature oversizing. This phrase is NOT to be turned into a quantitative capacity assumption. [CONFIRMED — OWNER revision decision §12]
+
+**UX/UI references:**
+- The screenshots provided by OWNER constitute the reference UX/UI orientation for V1. Principles: simple interface, low visual overload, sober offer cards, readability first, no logos, no sharing, no Apply button. [CONFIRMED — OWNER revision decision §10]
 
 ## 11. Assumptions
 
-All ASSUMPTION items in this charter, listed for OWNER review:
+All previous ASSUMPTION items (A1–A7) have been resolved by OWNER revision decisions and are now CONFIRMED (see Sections 7, 9, 10). The agent has not silently promoted ASSUMPTION to CONFIRMED — each promotion is grounded in an explicit OWNER revision decision referenced in the relevant section.
 
-| ID | Assumption | Section |
-|----|------------|---------|
-| A1 | No public read API is required for V1. | 9. Project Boundary |
-| A2 | Offers are entered manually by the administration (no automated import pipeline in V1). | 9. Project Boundary |
-| A3 | No outbound notifications (email, push, SMS) are required in V1. | 9. Project Boundary |
-| A4 | The application's UI language is French. | 10. Constraints |
-| A5 | GDPR compliance is required. | 10. Constraints |
-| A6 | The application is mono-tenant — a single JOURDAIN EMPLOI instance, not a multi-organization platform. | 9. Project Boundary (implicit) |
-| A7 | The ordinary administration team is small (single-digit administrators); no fine-grained permission model is required in V1 for ordinary admins (the single ordinary daily role is ADMIN). This assumption does NOT apply to Fantomas, whose role and capabilities are CONFIRMED in Section 7. | 3. Users / Stakeholders |
+**Remaining ASSUMPTION items: NONE.**
 
-Each ASSUMPTION will remain ASSUMPTION in the final charter unless OWNER explicitly confirms or corrects it. The agent must not upgrade ASSUMPTION to CONFIRMED silently (S4 §10 No silent promotion).
+Reclassification summary:
+
+| Former ID | Former assumption | Resolution | New state |
+|-----------|-------------------|------------|-----------|
+| A1 | No public read API in V1 | OWNER revision §8 | CONFIRMED (Section 9) |
+| A2 | Offers entered manually (no automated import) | OWNER revision §3 + §6 | CONFIRMED (Section 9) |
+| A3 | No outbound notifications in V1 | OWNER revision §9 | CONFIRMED (Section 9) |
+| A4 | UI is French only | OWNER revision §2 | CONFIRMED (Section 10) |
+| A5 | GDPR compliance required | OWNER revision §14 — not a blocker for S4/V1 | DEFERRED DECISION D1 (Section 10) |
+| A6 | Mono-tenant | OWNER revision §1 | CONFIRMED (Section 9) |
+| A7 | Small admin team, single ADMIN role, no complex RBAC | OWNER revision §4 + §13 | CONFIRMED (Section 3 + Section 7) |
 
 ## 12. Dependencies
 
@@ -248,12 +285,23 @@ Each ASSUMPTION will remain ASSUMPTION in the final charter unless OWNER explici
 - OWNER-approved technical specification (S6 output). [CONFIRMED — required before implementation]
 
 **Soft dependencies (nice-to-haves):**
-- OWNER-provided design references for the public interface ("proches des références visuelles fournies"). [CONFIRMED — mentioned by OWNER; specific references not yet provided. See Q5.]
-- OWNER-defined success metrics. [OPEN QUESTION — Q3]
+- OWNER-provided screenshots for UX/UI orientation. [CONFIRMED — OWNER revision decision §10]
 
 ## 13. Success Definition
 
-V1 is successful when:
+The V1 success criteria are primarily functional, not quantitative. The V1 is successful if the following user journeys work correctly:
+
+**ADMIN journey (functional success criterion):**
+
+Login → List of offers → New offer → Data entry → Save → Find the offer → Modify → Publish → Suspend / Archive. [CONFIRMED — OWNER revision decision §11]
+
+**PUBLIC journey (functional success criterion):**
+
+Access the list of published offers → Open an offer → Read its full detail. [CONFIRMED — OWNER revision decision §11]
+
+No quantitative audience metric (traffic, conversion, adoption count) is required as a V1 delivery condition. [CONFIRMED — OWNER revision decision §11]
+
+General V1 success conditions (carried from earlier sections):
 
 1. The administration can authenticate and access a private back-office. [CONFIRMED]
 2. The administration can perform the complete offer lifecycle: create, record, modify, publish, suspend, archive. [CONFIRMED]
@@ -262,40 +310,38 @@ V1 is successful when:
 5. The public can open a published offer and read its full detail, including application modalities when available. [CONFIRMED]
 6. The system respects the priority order in Section 10 (simplicity first, then correctness, then security, etc.). [CONFIRMED]
 
-Quantitative success criteria (number of offers supported, page load time, uptime SLO, adoption metrics) are not specified by OWNER. [OPEN QUESTION — Q3]
-
 ## 14. Material Risks
 
 | Risk | Likelihood | Impact | Notes |
 |------|------------|--------|-------|
 | Scope creep toward a recruitment platform | Medium | High | The V1 boundary is firm (Section 8); any drift risks turning a small project into a large one. |
-| Undefined success metrics | High | Medium | Without quantitative targets, "success" is subjective. See Q3. |
-| Undefined "source offer" concept | Medium | Medium | OWNER mentions "offre source" in data rules; if offers come from external sources, an import process may be needed. See Q4. |
-| Undefined administrative roles | Medium | Low-Medium | If multiple ordinary administrators exist, the absence of a permission model may create governance issues. See Q1. Fantomas is excluded from this risk (its role is CONFIRMED). |
 | Technical complexity drift | Low | Medium | OWNER preferences (Next.js, Neon, Vercel) are reasonable, but the cumulative complexity must remain proportional to V1 scope. |
-| Data privacy / GDPR | Medium | High | Job offers may contain personal contact information; GDPR compliance assumed required (A5) but not specified. |
+| Data privacy / GDPR | Medium | High | Job offers may contain personal contact information. Detailed GDPR constraints deferred to S6 (D1). Not a blocker for S5/V1 functional scope. |
 | Hosted dependency on third parties (Vercel, Neon) | Low | Medium | Both are reliable, but an outage or pricing change could affect V1 operation. Acceptable for V1 per OWNER preferences. |
 | Fantomas bootstrap credential mishandling | Medium | High | The initial Fantomas password is OWNER-specified and must not be stored in the repository (S0 §13). If accidentally committed, GitHub Secret Scanning may revoke access; if left unchanged after bootstrap, the system is exposed. Mitigation: rotate on first use, inject via §25 External Parameter Gate. |
 | Fantomas privilege misuse | Low | High | Fantomas has highest privileges; misuse or compromise could compromise the entire system. Mitigation: break-glass use only, audit log, rotation. Technical controls deferred to S6/S7. |
+
+Risks previously associated with undefined success metrics, undefined "source offer" concept, and undefined administrative roles have been removed — these items are now CONFIRMED by OWNER revision decisions §3, §4, §6, §11, §13.
 
 This list is not exhaustive — it captures risks identifiable at charter level. Detailed risk analysis happens in S5/S6.
 
 ## 15. Open Questions / Decisions
 
-All OPEN QUESTION items requiring OWNER input before S5:
+All previous OPEN QUESTION items (Q1–Q8) have been resolved by OWNER revision decisions or explicitly reclassified as DEFERRED DECISIONS that are NOT blockers for S5 or V1.
 
-| ID | Question | Why it matters | Charter impact |
-|----|----------|----------------|----------------|
-| Q1 | How many administrators will use the back-office? Do they need distinct roles (e.g., editor vs. publisher) or are all administrators equivalent? | Affects authentication model, permission granularity, and audit requirements. | Could shift scope from simple auth to RBAC. |
-| Q2 | What is the current state of job-offer publication at JOURDAIN EMPLOI? Is there an existing system being replaced? | Affects migration scope and whether "source offer" implies imports. | Could add a migration workstream. |
-| Q3 | What are the quantitative success criteria for V1? (e.g., offers supported, page load time, uptime SLO) | Without metrics, success is subjective. | Affects S5 acceptance criteria and S11 verification. |
-| Q4 | What does "offre source" mean in practice? Are offers entered manually, imported from another system, or both? | Affects whether V1 needs an import feature or only manual entry. | Could expand scope (import pipeline) or confirm current scope (manual entry only). |
-| Q5 | What are the specific visual references OWNER mentions for the public interface? | Affects S5 UI requirements and S6 UI architecture decisions. | May inform S6 but does not change V1 scope. |
-| Q6 | Is the application strictly French-language, or does it need to support other languages in V1? | Affects i18n architecture in S6. | Could shift from simple French-only to i18n-aware design. |
-| Q7 | What is the expected retention period for archived offers? When can they be deleted? | Affects data lifecycle and storage cost. | Could trigger a deletion/archival policy in S5. |
-| Q8 | Are there constraints on where the application is hosted geographically (data residency)? | Affects Vercel region selection and Neon region. | Could constrain technical choices in S6. |
+**Remaining OPEN QUESTION items: NONE.**
 
-If OWNER resolves all OPEN QUESTIONS, the charter moves to all-CONFIRMED state. If some remain unresolved at S5 entry, they must be tracked through S5/S6 as decision-relevant items.
+**DEFERRED DECISION items** (NOT blockers for S5 or V1 — will be examined at the appropriate later AISE stage, typically S6):
+
+| ID | Deferred decision | Why it is NOT a blocker for S5 / V1 | Stage where it will be examined |
+|----|-------------------|--------------------------------------|--------------------------------|
+| D1 | Detailed GDPR / data-privacy constraints (data minimization, retention rules, consent flows if any) | OWNER revision §14 explicitly states that detailed regulatory constraints should NOT become a functional S4 blocker. The functional V1 scope (Sections 7–9) does not depend on these details. | S6 (technical specification) |
+| D2 | Current state of job-offer publication at JOURDAIN EMPLOI (is there an existing system being replaced? migration scope?) | OWNER revision §11 + §14 establish that V1 success is functional and migration scope is not a V1 requirement. If a migration need surfaces later, it will be handled as a separate workstream. | S5 or later, only if OWNER identifies a migration need |
+| D3 | Data residency / hosting region constraints | OWNER revision §14 explicitly defers regulatory/geographic constraints to the appropriate technical stage. Vercel and Neon default regions are acceptable for V1 unless a specific constraint is identified. | S6 (technical specification) |
+
+The reclassification is grounded in explicit OWNER revision decisions §11, §12, §13, §14. No OPEN QUESTION has been silently closed — each closure or deferral is traceable to a specific OWNER decision.
+
+If OWNER resolves any DEFERRED DECISION before S5 entry, it can be promoted to CONFIRMED in a subsequent charter revision. If a DEFERRED DECISION becomes materially relevant during S5, it will be surfaced as a new OPEN QUESTION at that time.
 
 ## 16. Evidence Register
 
@@ -303,26 +349,29 @@ Summary of evidence states across all charter claims:
 
 | Evidence State | Count (approximate) |
 |----------------|----------------------|
-| CONFIRMED | ~70 (project identity, scope, exclusions, fields, lifecycle, priorities, technical preferences, Fantomas principal identity/role/capabilities/routing) |
-| ASSUMPTION | 7 (A1–A7, listed in Section 11) |
-| OPEN QUESTION | 8 (Q1–Q8, listed in Section 15) |
+| CONFIRMED | ~110 (project identity, scope, exclusions, fields, lifecycle, priorities, technical preferences, Fantomas principal, all resolved OWNER revision decisions §1–§13, §15–§17) |
+| ASSUMPTION | 0 (all previous A1–A7 have been resolved — see Section 11 reclassification summary) |
+| OPEN QUESTION | 0 (all previous Q1–Q8 have been resolved or reclassified as DEFERRED DECISIONS — see Section 15) |
+| DEFERRED DECISION | 3 (D1 GDPR details, D2 migration scope, D3 data residency — all explicitly NOT blockers for S5 or V1, per OWNER revision §14) |
 
-The charter is dominated by CONFIRMED elements because OWNER has provided a rich, structured input — including the Fantomas system principal as an additional confirmed requirement. The ASSUMPTION and OPEN QUESTION items are explicit and surfaced for OWNER review — none are buried.
+The charter is now dominated by CONFIRMED elements. No ASSUMPTION or OPEN QUESTION remains. Three DEFERRED DECISIONS are explicitly tracked and explicitly NOT blockers — they will be examined at the appropriate later AISE stage (typically S6).
 
 Note on the Fantomas bootstrap credential: the existence of an OWNER-specified initial password is CONFIRMED, but the literal value is intentionally NOT recorded in this repository (per S0 §13). The literal value will be injected via S0 §25 External Parameter Gate at implementation time (S10) through a secure channel.
+
+Verdict: **CHARTER READY FOR OWNER APPROVAL = YES.** All material charter claims are CONFIRMED. The 3 DEFERRED DECISIONS are explicitly NOT blockers for S5 or V1. The charter is bounded to S4 (WHAT / WHY / USERS / SCOPE / CONSTRAINTS) and does NOT pre-empt S5 (product requirements) or S6 (technical architecture).
 
 ---
 
 ## Charter Approval
 
-This charter is a DRAFT presented for OWNER review. It is NOT valid until OWNER explicitly approves it.
+This charter is a **FINAL DRAFT** presented for OWNER review and explicit approval. It is NOT valid until OWNER explicitly approves it.
+
+All previous ASSUMPTION items have been resolved. All previous OPEN QUESTION items have been resolved or reclassified as DEFERRED DECISIONS (not blockers for S5 or V1). The charter is ready for OWNER approval.
 
 OWNER may:
-- **Approve** — the charter is frozen and S4 is complete.
+- **Approve** — the charter is frozen and S4 is complete; PROJECT_STATE is updated to S4 CLOSED / PASS — CHARTER APPROVED.
 - **Request changes** — S4 revises and re-presents.
 - **Provide additional information** — S4 incorporates and re-classifies.
-- **Resolve OPEN QUESTIONS** — S4 updates the charter accordingly.
-- **Confirm or correct ASSUMPTIONS** — S4 promotes to CONFIRMED or removes.
 
 Per AISE S4 §8: an OWNER's absence of objection is NOT approval — explicit acknowledgment is required.
 
