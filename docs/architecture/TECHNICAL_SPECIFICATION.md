@@ -1,8 +1,8 @@
 # TECHNICAL SPECIFICATION — JOURDAIN EMPLOI V1
 
 **Document type:** AISE S6 — Technical Specification
-**Status:** FINAL DRAFT — READY FOR OWNER APPROVAL
-**Date:** 2026-09-14 (initial draft), 2026-09-15 (revised after OWNER revision decisions §1–§15)
+**Status:** OWNER APPROVED — S6 CLOSED / PASS
+**Date:** 2026-09-14 (initial draft), 2026-09-15 (revised after OWNER revision decisions §1–§15), 2026-09-15 (final patch §1–§5), 2026-09-15 (auth consistency patch), 2026-09-15 (OWNER APPROVED)
 **Project:** JOURDAIN EMPLOI V1
 **Canonical repository:** `github.com/alexkanga/jourdain`
 **Canonical branch:** `main`
@@ -33,15 +33,16 @@ Silent conversions are forbidden (S6 §4):
 |---|---|
 | Project | JOURDAIN EMPLOI |
 | AISE Stage | S6 — Technical Specification |
-| Status | FINAL DRAFT — READY FOR OWNER APPROVAL |
+| Status | OWNER APPROVED — S6 CLOSED / PASS |
 | Source Charter | `docs/planning/PROJECT_CHARTER.md` — APPROVED 2026-09-13 at `fa377c1` |
 | Source Product Requirements | `docs/product/PRODUCT_REQUIREMENTS.md` — APPROVED 2026-09-14 at `9ec4a08` |
 | S6 initial draft date | 2026-09-14 |
-| S6 revision date | 2026-09-15 (after OWNER revision decisions §1–§15) |
-| S6 OWNER approval | PENDING |
+| S6 revision date | 2026-09-15 (after OWNER revision decisions §1–§15 + final patch §1–§5 + auth consistency patch) |
+| S6 OWNER approval date | 2026-09-15 |
+| Approved baseline commit | `7c85323c557476672a1e227e8773b0fa45459ff4` |
 | Next recommended component | S7 — Project Manifest + ADR |
 
-Per AISE S6 §30, the baseline is NOT valid until OWNER explicitly approves it.
+Per AISE S6 §30, the baseline was NOT valid until OWNER explicitly approved it. OWNER has now explicitly approved it on 2026-09-15.
 
 ---
 
@@ -2617,18 +2618,31 @@ S6 does NOT create ADR files. S7 creates the durable ADR files based on this han
 
 ## 29. Approval / Baseline Status
 
+**APPROVED BY OWNER on 2026-09-15.**
+
+OWNER has explicitly approved this technical specification at canonical commit `7c85323c557476672a1e227e8773b0fa45459ff4` with the following acknowledgment:
+
+> J'approuve explicitement la spécification technique S6 finalisée de JOURDAIN EMPLOI. TECHNICAL SPECIFICATION: docs/architecture/TECHNICAL_SPECIFICATION.md. BASELINE S6 APPROUVÉ: 7c85323c557476672a1e227e8773b0fa45459ff4. S6 est APPROUVÉ.
+
+Per AISE S6 §31, the baseline is now FROZEN as the canonical intended state for the project. Any future modification requires a material change record and OWNER approval.
+
+Per AISE S6 §32, S6 transitions PROJECT_STATE to:
+- AISE PHASE: S6 — CLOSED / PASS
+- TECHNICAL SPECIFICATION: APPROVED
+- NEXT RECOMMENDED: S7 — Project Manifest + ADR
+
+S7 begins only after explicit OWNER GO.
+
 | Field | Value |
 |---|---|
-| Document status | FINAL DRAFT — READY FOR OWNER APPROVAL |
+| Document status | OWNER APPROVED — S6 CLOSED / PASS |
 | Charter reference | `docs/planning/PROJECT_CHARTER.md` at `fa377c1` |
 | Product requirements reference | `docs/product/PRODUCT_REQUIREMENTS.md` at `9ec4a08` |
 | S6 initial draft date | 2026-09-14 |
-| S6 revision date | 2026-09-15 (after OWNER revision decisions §1–§15) |
-| S6 OWNER approval | PENDING |
-| S6 closure (S6 CLOSED / PASS) | PENDING — requires OWNER approval |
+| S6 revision date | 2026-09-15 (after OWNER revision decisions §1–§15 + final patch §1–§5 + auth consistency patch) |
+| S6 OWNER approval date | 2026-09-15 |
+| Approved baseline commit | `7c85323c557476672a1e227e8773b0fa45459ff4` |
 | Next recommended component | S7 — Project Manifest + ADR |
-
-Per AISE S6 §30, the baseline is NOT valid until OWNER explicitly approves it. OWNER's absence of objection is NOT approval — explicit acknowledgment is required.
 
 ### 29.1 Quality gate self-check (per S6 §34, revised per OWNER §14 + final patch §5)
 

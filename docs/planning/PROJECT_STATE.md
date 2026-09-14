@@ -8,30 +8,33 @@ control plane) to understand where the project stands.
 ## Current phase
 
 PROJECT:                JOURDAIN EMPLOI
-AISE PHASE:             S5 — PRODUCT REQUIREMENTS
-STATUS:                 CLOSED PASS — PRODUCT REQUIREMENTS APPROVED
+AISE PHASE:             S6 — TECHNICAL SPECIFICATION
+STATUS:                 CLOSED PASS — TECHNICAL SPECIFICATION APPROVED
 CHARTER APPROVED:       YES
 CHARTER PATH:           docs/planning/PROJECT_CHARTER.md
 CHARTER APPROVAL DATE:  2026-09-13
 PRODUCT REQUIREMENTS APPROVED: YES
 PRODUCT REQUIREMENTS PATH: docs/product/PRODUCT_REQUIREMENTS.md
 PRODUCT REQUIREMENTS APPROVAL DATE: 2026-09-14
+TECHNICAL SPECIFICATION APPROVED: YES
+TECHNICAL SPECIFICATION PATH: docs/architecture/TECHNICAL_SPECIFICATION.md
+TECHNICAL SPECIFICATION APPROVAL DATE: 2026-09-15
 CANONICAL BRANCH:       main
-CANONICAL HEAD:         9ec4a08b467a4a3909fa9bc0a72bf02e4c682418
+CANONICAL HEAD:         7c85323c557476672a1e227e8773b0fa45459ff4
 REMOTE:                 configured (origin → git@github.com-aise-alexkanga-jourdain:alexkanga/jourdain.git)
-REMOTE HEAD:            9ec4a08b467a4a3909fa9bc0a72bf02e4c682418
+REMOTE HEAD:            7c85323c557476672a1e227e8773b0fa45459ff4
 LOCAL = REMOTE:         YES
 AISE SOURCE COMMIT:     2991df51c1fa692f892452c361081c626f028cd0
-COMPLETED COMPONENTS:   S0, S1, S2, S3, S4, S5 installed and canonical
+COMPLETED COMPONENTS:   S0, S1, S2, S3, S4, S5, S6 installed and canonical
 PRODUCT DISCOVERY:      CLOSED PASS — CHARTER APPROVED (S4)
 PRODUCT REQUIREMENTS:   CLOSED PASS — PRODUCT REQUIREMENTS APPROVED (S5)
-TECHNICAL SPECIFICATION: NOT STARTED (S6)
+TECHNICAL SPECIFICATION: CLOSED PASS — TECHNICAL SPECIFICATION APPROVED (S6)
 PROJECT MANIFEST/ADR:   NOT STARTED (S7)
 ROADMAP:                NOT STARTED (S8)
 IMPLEMENTATION:         NOT STARTED (S10)
-DEFERRED DECISIONS:     Charter-level: D1 (GDPR details — S6), D2 (migration scope — only if needed), D3 (data residency — S6). S5-level: DR-010 (id format), DR-020/021 (validation formats), DR-030/040 (full audit log), DR-050 (admin UI), DR-051 (SUPER_ADMIN role), DR-160 (GDPR), DR-170 (data residency). All explicitly non-blocking for S6 or V1.
+DEFERRED DECISIONS:     Charter-level: D1 (GDPR details — S6 resolved by TD-018), D2 (migration scope — only if needed), D3 (data residency — S6 resolved by TD-019). S5-level: DR-010 (id format — resolved by TD-015), DR-020/021 (validation formats — resolved by TD-008), DR-030/040 (full audit log — future), DR-050 (admin UI — future), DR-051 (SUPER_ADMIN role — future), DR-160 (GDPR — deferred per Charter D1), DR-170 (data residency — deferred per Charter D3). All explicitly non-blocking for S7 or V1.
 NEXT AUTHORIZED:        NONE until OWNER GO
-NEXT RECOMMENDED:       S6 — Technical Specification
+NEXT RECOMMENDED:       S7 — Project Manifest + ADR
 
 ## What exists
 
@@ -41,7 +44,7 @@ NEXT RECOMMENDED:       S6 — Technical Specification
 - This project state file: `docs/planning/PROJECT_STATE.md`.
 - Minimal README: `README.md`.
 
-## What does NOT exist (intentional, per S3 / S4 / S5 boundaries)
+## What does NOT exist (intentional, per S3 / S4 / S5 / S6 boundaries)
 
 - No application code.
 - No Next.js application scaffolded.
@@ -50,12 +53,11 @@ NEXT RECOMMENDED:       S6 — Technical Specification
 - No authentication provider configured.
 - No CI/CD pipeline.
 - No scheduled work, cron, or background automation (S0 §23 default).
-- No technical specification (S6 — next recommended stage).
-- No project manifest / ADRs (S7).
+- No project manifest / ADRs (S7 — next recommended stage).
 - No roadmap (S8).
 - No implementation (S10).
 
-## What exists now (after S5 closure)
+## What exists now (after S6 closure)
 
 - AISE governance control plane: S0–S14 + R1–R7, vendored canonical
   snapshot from source commit 2991df51c1fa692f892452c361081c626f028cd0.
@@ -69,7 +71,12 @@ NEXT RECOMMENDED:       S6 — Technical Specification
   (frozen at canonical commit `9ec4a08b467a4a3909fa9bc0a72bf02e4c682418`,
   approved by OWNER on 2026-09-14).
   Contains 65 CONFIRMED requirements (30 FR + 21 BR + 4 PERM + 1 INT + 9 NFR),
-  0 ASSUMPTION, 0 OPEN, 9 DEFERRED decisions (genuine future), 30 OUT OF SCOPE V1 items.
+  0 ASSUMPTION, 0 OPEN QUESTION, 9 DEFERRED decisions (genuine future), 30 OUT OF SCOPE V1 items.
+- **OWNER-APPROVED TECHNICAL SPECIFICATION**: `docs/architecture/TECHNICAL_SPECIFICATION.md`
+  (frozen at canonical commit `7c85323c557476672a1e227e8773b0fa45459ff4`,
+  approved by OWNER on 2026-09-15).
+  Contains 31 technical decisions (30 DECIDED + 1 MANDATED),
+  15 ADR candidates for S7, 0 OPEN, 0 PROVISIONAL.
 
 ## OWNER-provided inputs (recorded as-is, evidence for S4/S5/S6)
 
@@ -210,8 +217,8 @@ Architectural constraint (OWNER-stated):
 
 ## Stop contract
 
-S5 is CLOSED / PASS — PRODUCT REQUIREMENTS APPROVED. S6 has NOT
-started. S6 begins only after explicit OWNER GO.
+S6 is CLOSED / PASS — TECHNICAL SPECIFICATION APPROVED. S7 has NOT
+started. S7 begins only after explicit OWNER GO.
 
-NEXT RECOMMENDED COMPONENT: S6 — Technical Specification
+NEXT RECOMMENDED COMPONENT: S7 — Project Manifest + ADR
 NEXT ACTION: OWNER GO REQUIRED
