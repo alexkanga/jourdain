@@ -232,71 +232,119 @@ ADR CANDIDATE:  NO (MANDATED, not a choice)
 STATUS:         MANDATED
 ```
 
-### TD-003 — Authentication architecture
+### TD-003 — Authentication architecture (finalized per OWNER final patch §2, §3)
 
 ```
-TD-003: Authentication Architecture (revised per OWNER §2)
-DECISION AREA:  ADMIN and Fantomas authentication
+TD-003: Authentication Architecture (finalized)
+DECISION AREA:  ADMIN and Fantomas authentication — runtime auth stack + bootstrap
+                mechanism for initial system principals
 REQUIREMENTS:   FR-001 (login), FR-002 (logout), FR-003 (back-office denied to public),
                 FR-004 (no public registration), NFR-010 (no plaintext password),
                 NFR-011 (no password in repo), NFR-012 (session protection),
                 NFR-013 (Fantomas credential handling), PERM-003 (back-office restricted),
-                Charter §7 (Fantomas), AISE S0 §14/§21
+                PERM-004 (Fantomas capability inheritance per AISE §14/§21), Charter §7
+                (Fantomas), OWNER final patch §2 (Username plugin explicit), §3 (bootstrap
+                via Better Auth supported mechanism, no manual hash INSERT)
 OPTIONS:        Better Auth | Auth.js (NextAuth v5) | Lightweight custom session-based auth
-SELECTED:       Better Auth (with Drizzle adapter, PostgreSQL Neon, email/username+password
-                credentials, database sessions, public sign-up disabled)
-RATIONALE:      OWNER revision §2 explicitly directs S6 to evaluate Better Auth and retain
-                it if its current integration verifies the V1 needs more directly.
-                V1 needs (per OWNER §2):
-                - Next.js App Router — Better Auth has first-class Next.js App Router support
-                - email/password and username/password — Better Auth supports both natively
-                  via `username()` plugin (Fantomas logs in by username "Fantomas", ADMIN by
-                  login identifier — both supported as username credentials)
-                - Drizzle adapter for PostgreSQL — Better Auth has an official Drizzle adapter
-                  (`better-auth/adapters/drizzle`) compatible with Neon serverless driver
-                - Sessions persisted in DB — Better Auth uses database sessions by default
-                  (session table in the auth schema)
-                - Disable public sign-up — Better Auth `signUp` is disableable via
-                  config (`emailAndPassword.signUp.disabled` or by omitting the signUp
-                  endpoint); V1 has no public registration per FR-004
-                - Extend user with role/principal — Better Auth user schema is extensible
-                  via `user.model` additional fields; we add `role` column
-                  (enum: 'admin' | 'fantomas')
-                - Protect server actions — Better Auth provides `auth.api.getSession()`
-                  server-side; combined with our `requireCapability()` wrapper (Section 13)
-                  for authorization
-                - Logout — Better Auth provides `auth.api.signOut()`
-                - Bootstrap controlled — Better Auth does not impose a bootstrap mechanism;
-                  our idempotent seed script (TD-020) creates Fantomas + initial ADMIN via
-                  Better Auth's `auth.api.createUser()` server-side (no public sign-up)
+SELECTED:       Better Auth, with the following explicit configuration:
+                - emailAndPassword authenticator (password-based authentication)
+                - Username plugin (better-auth/plugins/username) — username is the
+                  DAILY LOGIN IDENTIFIER of JOURDAIN EMPLOI (NOT the email). The login
+                  form asks for username + password. Fantomas logs in with username
+                  "Fantomas". ADMIN logs in with their assigned username.
+                - Drizzle adapter on PostgreSQL Neon (drizzle-orm/neon-http — TD-030)
+                - Database session strategy (sessions in the `session` table managed
+                  by Better Auth's Drizzle adapter)
+                - Public sign-up DISABLED (`emailAndPassword.signUp.disabled = true` or
+                  equivalent; no /sign-up endpoint, no public registration)
+                - rate limiter enabled with database storage on Neon (TD-031 finalized)
+                - user schema extended with a `role` column (enum: 'admin' | 'fantomas')
+                  via Better Auth's `user.model` additional fields config
+                - email field: PRESENT in the user table (Better Auth requires it
+                  internally) but NOT used as the daily login identifier. The email
+                  may be a synthetic value for system principals (e.g.,
+                  "fantomas@jourdain.local" for Fantomas, "admin1@jourdain.local" for
+                  the initial ADMIN) since no email verification or notification flow
+                  exists in V1 (no notifications — OOS-013). The email is NOT exposed
+                  in the daily admin UI as a login field.
+                - No public "username availability" check endpoint (no information
+                  leak about existing usernames; brute-force protection is handled
+                  by the rate limiter, not by revealing existing usernames).
+
+                BOOTSTRAP MECHANISM (OWNER final patch §3): the bootstrap script
+                (db/bootstrap/bootstrap.ts, per TD-020) creates the initial system
+                principals (Fantomas + initial ADMIN) via Better Auth's SUPPORTED
+                server-side user creation API: `auth.api.createUser({ body: {
+                username, password, email, role, ... } })`.
+                - This is the SUPPORTED Better Auth mechanism for creating users
+                  server-side without a public sign-up flow. Better Auth handles
+                  password hashing (scrypt by default — TD-009), creates the user
+                  record in the `user` table, AND creates the credential-account
+                  record in the `account` table (providerId='credential').
+                - The bootstrap script does NOT manually INSERT password hashes,
+                  does NOT bypass Better Auth, does NOT write to the DB directly.
+                  It calls `auth.api.createUser()` and lets Better Auth do its work.
+                - The bootstrap script is idempotent: before each createUser call, it
+                  checks whether a user with that username already exists (via
+                  `auth.api.listUsers({ query: { username } })` or a direct read-only
+                  query). If the user exists, it logs a warning and does NOT overwrite
+                  (password rotations are preserved). If it does not exist, it calls
+                  createUser.
+                - The username is immutable for system principals created by
+                  bootstrap (Fantomas's username "Fantomas" is fixed by the bootstrap
+                  config; the initial ADMIN's username is fixed by db/bootstrap/config.ts).
+                  Immutability is enforced at the application layer (no "change
+                  username" feature in V1; the admin UI does not expose username
+                  editing). A V2 admin UI may add username editing with Fantomas
+                  authorization, but that is out of V1 scope (DR-050).
+                - The email field for system principals is a synthetic value (e.g.,
+                  "fantomas@jourdain.local"); it is not used for verification or
+                  notifications in V1.
 
                 Comparison with rejected alternatives:
-                - Auth.js v5: mature but Credentials provider is explicitly discouraged in
-                  its docs for database-backed auth; the database-session strategy works
-                  but the integration with Drizzle requires the @auth/drizzle-adapter
-                  which is less actively maintained than Better Auth's adapter. Better Auth
-                  is more aligned with the V1 stack (Drizzle-first, Next.js App Router-first).
-                - Custom auth: requires implementing session management, CSRF protection,
-                  password hashing, secure cookie flags — fragile and not justified when
-                  Better Auth covers all needs with a smaller surface than Auth.js.
+                - Auth.js v5: mature but Credentials provider is explicitly discouraged
+                  in its docs for database-backed auth; the database-session strategy
+                  works but the integration with Drizzle requires the
+                  @auth/drizzle-adapter which is less actively maintained than Better
+                  Auth's adapter. Better Auth is more aligned with the V1 stack
+                  (Drizzle-first, Next.js App Router-first, username plugin native).
+                - Custom auth: requires implementing session management, CSRF
+                  protection, password hashing, secure cookie flags, username
+                  uniqueness, rate limiting — fragile and not justified when Better
+                  Auth covers all needs with a smaller surface.
 
                 Password hashing: Better Auth uses scrypt by default (Node.js built-in
-                crypto.scrypt — no native binding, no Vercel build concern). This removes
-                the bcrypt-vs-bcryptjs open question (Owner §7) — it disappears entirely.
-                The hash is stored in the user record by Better Auth automatically.
+                crypto.scrypt — no native binding, no Vercel build concern). This
+                removes the bcrypt-vs-bcryptjs open question (Owner §7) — it
+                disappears entirely. The hash is stored in the `account` table by
+                Better Auth automatically (NOT in a custom column; NOT manually
+                written by the bootstrap script).
 
-                IMPORTANT — Separation of concerns (OWNER §2): Better Auth authenticates
-                (verifies credentials, manages sessions). Our `can()` / `requireCapability()`
-                layer (Section 13) authorizes (checks capabilities per AISE §21). The
-                authorization logic is independent of the auth library — Fantomas semantics
-                are preserved regardless of which library authenticates.
-CONSEQUENCES:   Better Auth Drizzle adapter generates the auth tables (user, session,
-                account, verification) — S6 does NOT redefine these tables (Section 13
-                per OWNER revision §13). The `users` table is extended with a `role` column
-                (enum: 'admin' | 'fantomas'). The `can()` / `requireCapability()` abstraction
-                lives in lib/server/auth.ts and wraps Better Auth's `getSession()`.
-                No bcrypt dependency (Better Auth uses scrypt by default). No bcryptjs
-                fallback needed.
+                IMPORTANT — Separation of concerns (OWNER §2 and §3): Better Auth
+                authenticates (verifies credentials, manages sessions, rate-limits
+                auth endpoints, creates users server-side). Our `can()` /
+                `requireCapability()` layer (Section 13) authorizes (checks
+                capabilities per AISE §21). The authorization logic is INDEPENDENT of
+                the auth library — Fantomas semantics are preserved regardless of
+                which library authenticates. The Better Auth Admin plugin (if ever
+                used in a future version) is NOT used as a business authorization
+                system; it would be a bootstrap/administration convenience at most.
+                Our `can()` / `requireCapability()` remains the authority for
+                JOURDAIN EMPLOI business capabilities.
+CONSEQUENCES:   - Better Auth Drizzle adapter generates the auth tables (user,
+                session, account, verification) + the rate-limit table (TD-031) —
+                S6 documents the expected shape (Section 9.3.2) but does NOT redefine
+                these tables.
+                - The `user` table is extended with `username` (Username plugin) and
+                `role` (V1 extension) columns.
+                - The login form asks for username + password (NOT email).
+                - Public sign-up is disabled; users are created ONLY via the bootstrap
+                script (TD-020) calling `auth.api.createUser()`.
+                - No bcrypt dependency (Better Auth uses scrypt by default). No
+                bcryptjs fallback needed.
+                - `can()` / `requireCapability()` lives in
+                lib/server/auth/authorization.ts and is the AUTHORITY for business
+                capabilities — independent of Better Auth.
 ADR CANDIDATE:  YES
 STATUS:         DECIDED
 ```
@@ -1134,99 +1182,149 @@ ADR CANDIDATE:  NO (standard)
 STATUS:         DECIDED
 ```
 
-### TD-030 — Neon PostgreSQL driver (added per OWNER §5)
+### TD-030 — Neon PostgreSQL driver (added per OWNER §5, finalized per OWNER final patch §4)
 
 ```
-TD-030: Neon PostgreSQL Driver (added per OWNER revision §5)
-DECISION AREA:  Which Neon driver to use for Drizzle ORM access
+TD-030: Neon PostgreSQL Driver (finalized)
+DECISION AREA:  Which Drizzle-Neon binding to use for DB access
 REQUIREMENTS:   TD-002 (PostgreSQL on Neon), TD-004 (Drizzle), OWNER revision §5 (driver
-                choice must match V1's actual transaction needs; do NOT default to
-                Neon HTTP if interactive transactions are required)
-OPTIONS:        @neondatabase/serverless (HTTP/WebSockets, serverless-optimized) |
-                postgres-js (TCP, full interactive transactions) |
-                pg (TCP, full interactive transactions, classic Node.js driver)
-SELECTED:       @neondatabase/serverless (Neon serverless driver)
-RATIONALE:      V1's transaction needs (per OWNER revision §6 — identify operations
-                requiring a transaction):
-                1. Bootstrap of Fantomas + initial ADMIN — single INSERT per user,
-                   no multi-statement transaction needed (each user creation is
-                   independent; if the script creates 2 users and the second fails,
-                   the first can remain — idempotent re-run handles it).
-                2. Better Auth session creation — handled by Better Auth internally,
-                   single INSERT into the sessions table.
-                3. Offer mutations (create, edit, publish, suspend, archive) — each
-                   is a single UPDATE or INSERT on the offers table, optionally with
-                   a revalidatePath call (not a DB operation). No multi-statement
+                choice must match V1's actual transaction needs), OWNER final patch §4
+                (choose explicitly between drizzle-orm/neon-http and
+                drizzle-orm/neon-serverless; do NOT leave "HTTP/WebSockets" as two
+                possibilities in a DECIDED entry)
+OPTIONS:        drizzle-orm/neon-http (HTTP, no interactive transactions) |
+                drizzle-orm/neon-serverless (WebSocket, interactive transactions) |
+                drizzle-orm/postgres-js (TCP, full interactive transactions)
+SELECTED:       drizzle-orm/neon-http (HTTP-based, no interactive transactions)
+RATIONALE:      V1's transaction needs (per OWNER revision §6 and final patch §4 —
+                identify operations requiring a transaction):
+                1. Bootstrap of Fantomas + initial ADMIN — single createUser call per
+                   user via Better Auth (which internally does INSERT user + INSERT
+                   account credential). Better Auth executes these as separate
+                   statements, not a multi-statement interactive transaction. If the
+                   second INSERT fails, the first can remain (idempotent re-run handles
+                   it; or the bootstrap script can wrap them in a try/catch and clean
+                   up). No interactive transaction required.
+                2. Better Auth session creation — single INSERT into the session table.
+                3. Better Auth rate limiter with database storage (TD-031 revised) —
+                   INSERT or UPSERT into a rate-limit table + SELECT count. Better
+                   Auth's rate limiter executes these as separate statements; no
+                   multi-statement interactive transaction required. The rate-limit
+                   counter is eventually consistent (a slight over-count or under-count
+                   under concurrent attempts is acceptable for V1's threat model —
+                   Vercel edge DDoS protection is the primary defense).
+                4. Offer mutations (create, edit, publish, suspend, archive) — each is
+                   a single UPDATE or INSERT on the offers table, optionally with a
+                   revalidatePath call (not a DB operation). No multi-statement
                    transaction needed.
-                4. Public reads — single SELECT per request.
+                5. Public reads — single SELECT per request.
 
                 V1 has NO multi-statement interactive transactions, NO long-running
-                transactions, NO transactions requiring a persistent TCP connection
-                across multiple round trips. All V1 transactions are short, single-
-                statement operations.
+                transactions, NO transactions requiring a persistent WebSocket or
+                TCP connection across multiple round trips. All V1 DB operations are
+                short, single-statement HTTP requests.
 
                 Therefore:
-                - @neondatabase/serverless: designed for serverless (Vercel), uses
-                  HTTP/WebSockets, supports transactions via the `transaction()`
-                  helper (which sends multiple statements in a single HTTP request
-                  to Neon's HTTP endpoint — sufficient for V1's short transactions).
-                  No TCP connection pool to manage. Best fit for Vercel serverless
-                  functions. No cold-start penalty for TCP.
-                - postgres-js or pg (TCP): would require a persistent connection or
-                  a pool, which is fragile on Vercel serverless (connection reuse
-                  issues, cold-start cost). Overkill for V1.
+                - drizzle-orm/neon-http: HTTP-based, one request per statement, no
+                  persistent connection, no interactive transactions. Simplest,
+                  fastest cold-start, best fit for Vercel serverless functions.
+                  Sufficient for ALL V1 operations listed above.
+                - drizzle-orm/neon-serverless (WebSocket): supports interactive
+                  transactions via persistent WebSocket — overkill for V1; adds
+                  WebSocket lifecycle complexity (connection management, reconnect,
+                  idle timeout) for no benefit.
+                - drizzle-orm/postgres-js (TCP): would require a persistent connection
+                  or a pool, fragile on Vercel serverless. Overkill.
 
-                @neondatabase/serverless is the simplest driver compatible with
-                V1's actual operations. If a future version requires long interactive
-                transactions (e.g., a multi-step data import), the driver can be
-                switched to postgres-js for that specific code path.
-CONSEQUENCES:   Drizzle is instantiated with the Neon serverless driver:
-                `drizzle(new Pool({ connectionString: process.env.DATABASE_URL }))`
-                where `Pool` comes from `@neondatabase/serverless`. No `pg` or
-                `postgres-js` dependency. Short transactions use `db.transaction()`
-                which the Neon serverless driver supports.
-ADR CANDIDATE:  NO (implementation detail)
+                drizzle-orm/neon-http is the simplest binding compatible with V1's
+                actual operations. If a future version requires interactive
+                transactions (e.g., a multi-step data import needing atomicity across
+                statements), the binding can be switched to drizzle-orm/neon-serverless
+                or drizzle-orm/postgres-js for that specific code path.
+CONSEQUENCES:   Drizzle is instantiated with the neon-http binding:
+                `drizzle(new Pool({ connectionString: process.env.DATABASE_URL }), {
+                ...neonConfig })` from drizzle-orm/neon-http. Underlying package:
+                @neondatabase/serverless (the neon-http binding uses
+                @neondatabase/serverless's HTTP client under the hood). No `pg` or
+                `postgres-js` dependency. No WebSocket connection. All DB operations
+                are single-statement HTTP requests.
+                IMPORTANT: any code path that later needs an interactive transaction
+                must NOT silently use db.transaction() expecting it to work on
+                neon-http — it will not. Such a code path requires switching the
+                binding for that path or rethinking the operation.
+ADR CANDIDATE:  NO (implementation detail, but explicit to avoid S10 ambiguity)
 STATUS:         DECIDED
 ```
 
-### TD-031 — Login rate limiting architecture (added per OWNER §7)
+### TD-031 — Login rate limiting architecture (finalized per OWNER final patch §1)
 
 ```
-TD-031: Login Rate Limiting Architecture (added per OWNER revision §7)
+TD-031: Login Rate Limiting Architecture (finalized)
 DECISION AREA:  Architectural mechanism for protecting the login endpoint against
-                brute-force attacks
+                brute-force attacks, compatible with Vercel serverless
 REQUIREMENTS:   NFR-012 (session protection), OWNER revision §7 (define the behavior
-                architecturally in S6; implementation details can belong to S10)
-SELECTED:       In-memory rate limiter (per-IP counter with sliding window) in the
-                login Server Action, with a configurable threshold (default: max 5
-                failed attempts per IP per 15-minute window). After the threshold,
-                the login action returns a generic "too many attempts" error
-                (FR-001-ERR style — no information leak).
-RATIONALE:      - In-memory (per-instance): simplest; no DB write on every attempt;
-                  no external service (no Vercel KV, no Upstash — both are paid
-                  add-ons). Acceptable for V1's threat model (small admin team, no
-                  public registration, no automated password spraying expected).
-                  Caveat: in-memory state is per-serverless-instance — on Vercel,
-                  each function instance has its own counter. An attacker hitting
-                  different instances could bypass. For V1, this is acceptable
-                  (Vercel's edge already provides DDoS protection; the rate limiter
-                  is a defense-in-depth layer, not the only one).
-                - DB-backed rate limiter: more robust (persists across instances),
-                  but adds a DB write per login attempt (cost + latency). Overkill
-                  for V1.
-                - Vercel KV / Upstash Redis: paid add-ons, excluded by OWNER anti-
-                  overengineering for V1.
+                architecturally in S6), OWNER final patch §1 (in-memory per-IP is NOT
+                retained for Vercel/serverless production; use Better Auth integrated
+                rate limiter; storage = database = Neon PostgreSQL; no Redis; no
+                custom rate limiter)
+OPTIONS:        Better Auth integrated rate limiter + database storage (Neon) |
+                In-memory per-IP (REJECTED — not serverless-compatible) |
+                DB-backed custom rate limiter (REJECTED — reinvents Better Auth) |
+                Vercel KV / Upstash Redis (REJECTED — paid add-on, OWNER excludes)
+SELECTED:       Better Auth integrated rate limiter, with database storage backed by
+                Neon PostgreSQL. Applied to the authentication endpoints (login
+                primarily; the only unauthenticated mutation in V1).
+RATIONALE:      OWNER final patch §1 directs S6 to NOT use in-memory rate limiting for
+                production Vercel/serverless (Better Auth documents that in-memory
+                storage is not suitable for serverless environments because each
+                function instance has its own memory and the counter does not
+                persist across instances or cold starts — an attacker hitting
+                different instances would bypass it).
 
-                The rate limiter is a small module (lib/server/auth/rate-limit.ts)
-                invoked at the start of the login Server Action. The threshold is
-                configurable via an env var (LOGIN_RATE_LIMIT_MAX, default 5) and
-                window (LOGIN_RATE_LIMIT_WINDOW_MIN, default 15).
+                Decision: use Better Auth's integrated rate limiter (the rate limiting
+                feature built into Better Auth) with `storage = database` (a Drizzle-
+                backed storage adapter pointing at the same Neon PostgreSQL database
+                used by the rest of V1). This:
+                - Is serverless-compatible (the counter is in the DB, not in process
+                  memory; it persists across function instances and cold starts).
+                - Adds NO new dependency (no Redis, no Vercel KV, no Upstash).
+                - Adds NO custom rate-limiter code (no reinvention, no maintenance
+                  burden, no sliding-window vs token-bucket choice to maintain).
+                - Is configured via Better Auth's config (rateLimit option with the
+                  database storage adapter); the rate-limit table is generated by
+                  Better Auth's Drizzle schema generation, then integrated into the
+                  versioned Drizzle migrations per TD-018 doctrine.
 
-                This is an ARCHITECTURAL decision (S6). The exact implementation
-                (sliding window counter, token bucket, etc.) is an S10 detail.
-CONSEQUENCES:   lib/server/auth/rate-limit.ts module. Called by the login Server
-                Action. No DB dependency. No external service. Configurable via env
-                vars. Implementation in S10.
+                Scope: applied to the authentication endpoints (login). The default
+                rules (configurable at implementation time) cover the main brute-
+                force concern: limit failed login attempts per IP/username within a
+                rolling window. The exact thresholds (e.g., max 5 failed attempts
+                per IP per 15 minutes, max 10 per username per hour) are S10
+                implementation choices — S6 fixes only the architecture: Better Auth
+                rate limiter + database storage + Neon.
+
+                On threshold exceeded, the login attempt is rejected by Better Auth
+                with a generic error (no information leak about whether the
+                username/password was valid — same shape as FR-001-ERR).
+
+                The rate limiter does NOT cover admin mutations (those are already
+                protected by authentication + requireCapability). It does NOT cover
+                public reads (Vercel edge DDoS protection handles those).
+CONSEQUENCES:   - Better Auth config includes the rate limiter with database storage
+                  adapter (Drizzle adapter, same DATABASE_URL as the rest of V1).
+                - Better Auth generates the rate-limit table schema via its Drizzle
+                  schema generation; S6/S10 integrates this schema into the versioned
+                  Drizzle migrations (per TD-018 — forward migration, reviewed, never
+                  drizzle-kit push against Production).
+                - No Redis, no Vercel KV, no Upstash Redis dependency.
+                - No custom lib/server/auth/rate-limit.ts module (the previous draft's
+                  in-memory module is REMOVED from the spec). Rate limiting is purely
+                  configured via Better Auth, not custom code.
+                - Login Server Action delegates to Better Auth's signIn, which
+                  internally checks the rate limiter before verifying credentials.
+                - Thresholds configurable via Better Auth config + env vars
+                  (BETTER_AUTH_RATE_LIMIT_* — exact names defined by Better Auth config
+                  at implementation time in S10).
 ADR CANDIDATE:  NO (security detail, coupled to TD-003)
 STATUS:         DECIDED
 ```
@@ -1266,10 +1364,9 @@ components/                   # React components
 lib/                          # Cross-cutting libraries
   server/                     # Server-only code (never imported by client components)
     auth/                     # Better Auth config + authorization layer
-      auth.ts                 # Better Auth config (Drizzle adapter, sign-up disabled)
+      auth.ts                 # Better Auth config (Drizzle adapter, username plugin, sign-up disabled, rate limiter config)
       authorization.ts        # can(), requireCapability(), getPrincipal() (library-independent)
-      rate-limit.ts           # Login rate limiter (TD-031)
-    db.ts                     # Drizzle client (Neon serverless driver, read DATABASE_URL)
+    db.ts                     # Drizzle client (drizzle-orm/neon-http, read DATABASE_URL)
     validation/               # Zod schemas (offer schema, login schema, etc.)
     services/                 # Business logic services
       offers.ts               # Offer CRUD + lifecycle transitions
@@ -1337,12 +1434,12 @@ Client components (`components/*`) may only import from `components/ui`, `lib/cl
 | Language | TypeScript (strict) | Charter §10 | MANDATED |
 | Framework | Next.js (App Router) | Charter §10 | MANDATED |
 | Database | PostgreSQL on Neon | Charter §10 | MANDATED |
-| Neon driver | @neondatabase/serverless | TD-030 | DECIDED |
+| Neon driver | drizzle-orm/neon-http (HTTP-based, no interactive transactions; underlying: @neondatabase/serverless) | TD-030 (finalized) | DECIDED |
 | ORM / Query | Drizzle ORM + Drizzle Kit | TD-004 | DECIDED |
 | Validation | Zod | TD-008 | DECIDED |
-| Auth | Better Auth (Drizzle adapter, username/password, database sessions, sign-up disabled) | TD-003 (revised) | DECIDED |
+| Auth | Better Auth (Drizzle adapter, Username plugin + emailAndPassword, database sessions, sign-up disabled, rate limiter with database storage) | TD-003 (finalized) | DECIDED |
 | Password hashing | Better Auth default (scrypt, Node.js built-in) | TD-009 (revised) | DECIDED |
-| Rate limiting | In-memory per-IP counter (login endpoint) | TD-031 | DECIDED |
+| Rate limiting | Better Auth integrated rate limiter + database storage on Neon (NOT in-memory, NOT Redis) | TD-031 (finalized) | DECIDED |
 | Authorization abstraction | can() / requireCapability() (independent of auth library) | TD-003 + Section 13 | DECIDED |
 | Forms | React Hook Form + zodResolver | TD-007 | DECIDED |
 | Data fetching | Server Components (read) + Server Actions (mutate) | TD-006 | DECIDED |
@@ -1383,8 +1480,11 @@ Client components (`components/*`) may only import from `components/ui`, `lib/cl
 | Stripe / payment lib | Excluded per Charter §8 |
 | Email service (Resend, etc.) | Excluded — V1 has no notifications (OOS-013) |
 | pg_trgm extension (in V1 initial) | TD-016 (revised) — optional performance optimization; deferred to a future migration only if profiling proves the need |
-| Vercel KV / Upstash Redis | TD-031 — paid add-ons; in-memory rate limiter sufficient for V1 |
-| `pg` / `postgres-js` (TCP drivers) | TD-030 — V1 has no long interactive transactions; @neondatabase/serverless is sufficient and serverless-optimized |
+| In-memory rate limiting | TD-031 (finalized) — NOT serverless-compatible (per-instance counter does not persist across Vercel function instances); replaced by Better Auth integrated rate limiter with database storage on Neon |
+| Custom rate limiter module | TD-031 (finalized) — reinvents Better Auth; no custom lib/server/auth/rate-limit.ts in V1 |
+| Vercel KV / Upstash Redis | TD-031 (finalized) — paid add-ons; database storage on Neon is sufficient for V1 |
+| `pg` / `postgres-js` (TCP drivers) | TD-030 (finalized) — V1 has no long interactive transactions; drizzle-orm/neon-http is sufficient and serverless-optimized |
+| drizzle-orm/neon-serverless (WebSocket) | TD-030 (finalized) — supports interactive transactions via persistent WebSocket, but V1 has no interactive transactions; adds WebSocket lifecycle complexity for no benefit |
 
 ---
 
@@ -1555,7 +1655,7 @@ The `role` column is the ONLY V1 extension to Better Auth's standard user table.
 | expiresAt | timestamptz | Better Auth | |
 | ... | ... | Better Auth | (other Better Auth standard columns) |
 
-**V1 does NOT redefine these tables.** Better Auth's Drizzle adapter generates them via `drizzle-kit generate` based on the Better Auth config. The migration files are versioned (TD-018). The only V1 customization is the `role` column on `user`, added via Better Auth's config so the adapter includes it in the schema generation.
+**V1 does NOT redefine these tables.** Better Auth's Drizzle adapter generates them via `drizzle-kit generate` based on the Better Auth config. The migration files are versioned (TD-018). The only V1 customization is the `role` column on `user`, added via Better Auth's config so the adapter includes it in the schema generation. Additionally, Better Auth's rate limiter with database storage (TD-031 finalized) generates a rate-limit table (e.g., `rate_limit` or similar — the exact name follows Better Auth's conventions) via the same Drizzle schema generation. This rate-limit table is part of the auth schema and is integrated into the versioned migrations like the other auth tables.
 
 ```sql
 CREATE TYPE user_role AS ENUM ('admin', 'fantomas');
@@ -1645,24 +1745,31 @@ Local database (`user` table managed by Better Auth Drizzle adapter, Section 9.3
 
 ### 12.2 Credential and session model
 
-- **Auth library**: Better Auth (TD-003 revised), with Drizzle adapter, username/password credentials, database sessions, public sign-up disabled.
-- **Credentials**: username (the `username` column on the `user` table) + password. The password is hashed by Better Auth using scrypt (Node.js built-in crypto.scrypt) — per TD-009 revised. The hash is stored in the `account` table (Better Auth's standard credential-account record), NOT in a custom column.
+- **Auth library**: Better Auth (TD-003 finalized), with Drizzle adapter, Username plugin + emailAndPassword authenticator, database sessions, public sign-up disabled, rate limiter with database storage.
+- **Daily login identifier**: username (NOT email). The login form asks for username + password. Fantomas logs in with username "Fantomas". ADMIN logs in with their assigned username. The email field exists in the user table (Better Auth requires it internally) but is NOT used as the daily login identifier; for system principals it is a synthetic value (e.g., "fantomas@jourdain.local").
+- **Username uniqueness**: enforced by the Username plugin (unique constraint on the `username` column).
+- **Username immutability for system principals**: usernames created by the bootstrap script are immutable in V1 (no "change username" feature in V1; the admin UI does not expose username editing). A V2 admin UI may add username editing with Fantomas authorization (DR-050).
+- **Credentials**: username + password. The password is hashed by Better Auth using scrypt (Node.js built-in crypto.scrypt) — per TD-009 revised. The hash is stored in the `account` table (Better Auth's standard credential-account record), NOT in a custom column, NOT manually written by the bootstrap script.
 - **Session strategy**: database (Better Auth persists sessions in the `session` table via its Drizzle adapter). Sessions are NOT JWT-based in V1 — database sessions are preferred for stateful admin back-office (immediate invalidation on logout, auditable).
 - **Session cookie**: Better Auth's session cookie (`better-auth.session_token` or similar — the exact name is set by Better Auth config), httpOnly, secure (production), SameSite=Lax.
 - **Session lifetime**: 7 days (Better Auth default; can be tuned via Better Auth config).
 - **Session expiry pruning**: lazy — Better Auth checks the `expiresAt` column on access and deletes expired sessions. No cron job (S0 §23).
-- **Sign-up disabled**: Better Auth's `signUp` endpoint is disabled in the config (`emailAndPassword.signUp.disabled = true` or equivalent). No public registration. Users are created ONLY via the bootstrap script (TD-020) or by Fantomas post-bootstrap (deferred to V2 admin UI).
+- **Sign-up disabled**: Better Auth's `signUp` endpoint is disabled in the config (`emailAndPassword.signUp.disabled = true` or equivalent). No public registration. Users are created ONLY via the bootstrap script (TD-020) calling `auth.api.createUser()`.
+- **No public "username availability" endpoint**: no information leak about existing usernames. Brute-force protection is handled by the rate limiter, not by revealing existing usernames.
 
 ### 12.3 Login flow (FR-001)
 
 ```
 Client → POST (form action) → Server Action `loginAction`
-  → In-memory rate limiter checks per-IP counter (TD-031); if exceeded, return generic error
   → Zod validates input ({ username, password })
   → Server Action calls Better Auth's signIn server-side:
-      auth.api.signInEmail({ body: { username, password } })
-      (or the username-specific Better Auth endpoint)
+      auth.api.signInUsername({ body: { username, password } })
+      (Username plugin endpoint; the emailAndPassword endpoint is NOT used for daily login)
   → Better Auth:
+    → Checks the rate limiter (database storage on Neon — TD-031 finalized) BEFORE
+      verifying credentials. If the IP/username has exceeded the threshold,
+      returns a generic "too many attempts" error (no information leak about
+      whether the username/password was valid — FR-001-ERR shape).
     → Queries user by username
     → If user found: verifies password via scrypt
       → If match: creates a session record in the `session` table, sets the
@@ -1695,25 +1802,35 @@ After first production deploy:
     → db/bootstrap/bootstrap.ts:
       → Reads FANTOMAS_INITIAL_PASSWORD env var
       → If no user with username='Fantomas':
-        → Calls Better Auth's createUser server-side:
-            auth.api.createUser({ body: { username: 'Fantomas', password:
-            FANTOMAS_INITIAL_PASSWORD, role: 'fantomas', ... } })
-        → Better Auth hashes the password (scrypt) and persists the user +
-          credential-account record
+        → Calls Better Auth's SUPPORTED server-side user creation API:
+            auth.api.createUser({ body: {
+              username: 'Fantomas',
+              password: FANTOMAS_INITIAL_PASSWORD,
+              email: 'fantomas@jourdain.local',  // synthetic; not used for daily login
+              role: 'fantomas',
+              // ...other Better Auth required fields
+            } })
+        → Better Auth handles: password hashing (scrypt — TD-009), user record
+          creation in the `user` table, credential-account record creation in
+          the `account` table (providerId='credential'). The bootstrap script
+          does NOT manually INSERT password hashes, does NOT bypass Better
+          Auth, does NOT write to the DB directly.
         → Log "Fantomas principal created"
       → Else: log "Fantomas already exists — not recreated (no overwrite)"
-      → For each admin in db/bootstrap/config.ts:
+      → For each admin in db/bootstrap/config.ts (username + env-var name for password):
         → If no user with that username:
           → Calls auth.api.createUser with the admin's username + env-var password
+            + synthetic email + role='admin'
       → Log summary
 ```
 
-The bootstrap script is idempotent. Re-running it does NOT overwrite existing users (so password rotations are preserved — the script checks existence before calling createUser). It does NOT log passwords. It does NOT hash passwords itself — Better Auth's createUser does that internally.
+The bootstrap script is idempotent. Re-running it does NOT overwrite existing users (so password rotations are preserved — the script checks existence via `auth.api.listUsers({ query: { username } })` or a read-only query before calling createUser). It does NOT log passwords. It does NOT hash passwords itself — Better Auth's `auth.api.createUser()` does that internally. It does NOT manually INSERT password hashes into the DB — Better Auth handles all DB writes via its Drizzle adapter.
 
-### 12.6 Separation of concerns (OWNER §2)
+### 12.6 Separation of concerns (OWNER §2 and §3)
 
-- **Better Auth authenticates**: verifies credentials, creates and manages sessions, handles password hashing. S6 does NOT implement these.
+- **Better Auth authenticates**: verifies credentials, creates and manages sessions, handles password hashing, rate-limits auth endpoints, creates users server-side via `auth.api.createUser()`. S6 does NOT implement these.
 - **Our `can()` / `requireCapability()` layer authorizes**: checks capabilities per AISE §21. S6 implements this (Section 13). The authorization layer is INDEPENDENT of the auth library — it only reads the `role` field from the session's user. If Better Auth were replaced by another library tomorrow, the authorization layer would still work as long as the new auth library populates the `role` field in the session.
+- **Better Auth Admin plugin (if ever used)**: NOT used as a business authorization system. It would be a bootstrap/administration convenience at most. Our `can()` / `requireCapability()` remains the AUTHORITY for JOURDAIN EMPLOI business capabilities.
 
 ### 12.7 Password reset
 
@@ -1896,11 +2013,12 @@ Per S0 §13: NO secret is committed to the repository, written to logs, displaye
 - No physical deletion in V1 (OOS-019).
 - Sessions expire per Better Auth default; expired sessions are pruned lazily.
 
-### 14.10 Rate limiting
+### 14.10 Rate limiting (revised per OWNER final patch §1)
 
 - V1 has no public submission endpoint (no public form). Login is the only unauthenticated mutation.
-- **Login rate limiting**: a simple in-memory or DB-based rate limiter (max N failed attempts per IP per minute) is SHOULD-priority for V1. Implementation: a small `login_attempts` table or in-memory cache (cleared on server restart — acceptable). If disproportionate, defer to V2.
-- **No rate limiting on public reads** — public reads are cached via Next.js ISR / on-demand revalidation; abuse is handled at the Vercel edge (DDoS protection built into Vercel).
+- **Login rate limiting**: handled by Better Auth's integrated rate limiter with database storage on Neon (TD-031 finalized). NOT in-memory (in-memory is not serverless-compatible — see TD-031 rationale). NOT custom code. NOT Redis/Vercel KV/Upstash. The exact thresholds (max attempts per IP/username per window) are configurable via Better Auth config + env vars at implementation time (S10). The architecture is fixed in S6: Better Auth rate limiter + database storage + Neon.
+- **No rate limiting on public reads** — public reads are server-rendered via Server Components; abuse is handled at the Vercel edge (DDoS protection built into Vercel).
+- **No rate limiting on admin mutations** — admin mutations are already protected by authentication + `requireCapability()`.
 
 ### 14.11 No injection prevention
 
@@ -2131,8 +2249,7 @@ Strict separation between Production and Preview is enforced (Charter §10 MANDA
 | `NEXT_PUBLIC_SITE_URL` | All | `https://jourdain-emploi.example.com` | For sitemap/SEO (TD-029) |
 | `INITIAL_ADMIN_LOGIN` | Optional (first deploy only) | `admin1` | Used by bootstrap script for first ADMIN (per TD-020) |
 | `INITIAL_ADMIN_PASSWORD` | Optional (first deploy only) | (value) | Used by bootstrap script for first ADMIN; env var can be removed after bootstrap |
-| `LOGIN_RATE_LIMIT_MAX` | Optional | `5` | Max failed login attempts per IP per window (TD-031); default 5 |
-| `LOGIN_RATE_LIMIT_WINDOW_MIN` | Optional | `15` | Rate-limit window in minutes (TD-031); default 15 |
+| `BETTER_AUTH_RATE_LIMIT_*` | Optional | (Better Auth rate-limit config) | Thresholds for the Better Auth rate limiter (TD-031 finalized). Exact env var names defined by Better Auth config at implementation time (S10). Examples: max attempts per IP, max per username, window duration. |
 
 ### 20.3 `.env.example` (committed placeholder — no real values)
 
@@ -2152,9 +2269,9 @@ INITIAL_ADMIN_PASSWORD=set-at-first-deploy-then-rotate
 # Public site URL (for sitemap/SEO)
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
-# Login rate limiting (optional, defaults shown)
-LOGIN_RATE_LIMIT_MAX=5
-LOGIN_RATE_LIMIT_WINDOW_MIN=15
+# Better Auth rate limiting (optional; exact names defined by Better Auth config in S10)
+# Examples: BETTER_AUTH_RATE_LIMIT_MAX_ATTEMPTS, BETTER_AUTH_RATE_LIMIT_WINDOW_SECONDS
+# BETTER_AUTH_RATE_LIMIT_*=
 ```
 
 This file is committed with placeholder values only (no real secrets — S0 §13). Real values are set in Vercel env vars (Production + Preview separately) and in each developer's `.env.local` (not committed, listed in `.gitignore`).
@@ -2399,7 +2516,7 @@ OWNER revision §7 directs S6 to reclass the 5 items previously listed as "non-b
 | bcrypt vs bcryptjs | RESOLVED by TD-009 revised — Better Auth handles password hashing with scrypt by default. No bcrypt or bcryptjs dependency. The question disappears entirely. | CLOSED in S6 |
 | pg_trgm index creation timing | RESOLVED by TD-016 revised — pg_trgm is OPTIONAL PERFORMANCE OPTIMIZATION, not a V1 initial requirement. V1 ships WITHOUT pg_trgm. If profiling proves the need later, a forward migration adds it (per TD-018 doctrine). | CLOSED in S6 (deferred as measured optimization, not an open question) |
 | Public search route handler vs URL search params | RESOLVED by TD-016 revised — public search is implemented as a Server Component reading `?q=` searchParams, querying the DB via Drizzle, rendering the filtered list server-side. NO public API route handler is created (avoids creating a "public API" that V1 excludes — INT-001, OOS-015). | CLOSED in S6 |
-| Login rate limiting implementation | RESOLVED architecturally by TD-031 — in-memory per-IP rate limiter with configurable threshold (default 5 per 15 min). The architectural decision (in-memory, no DB, no external service) is made in S6. Only the concrete sliding-window vs token-bucket implementation detail is deferred to S10. | CLOSED in S6 (architecture); S10 implements the chosen architecture |
+| Login rate limiting implementation | RESOLVED architecturally by TD-031 finalized — Better Auth integrated rate limiter with database storage on Neon (NOT in-memory — in-memory is not serverless-compatible per OWNER final patch §1). No Redis. No custom module. Thresholds configurable via Better Auth config + env vars at implementation time. | CLOSED in S6 (architecture); S10 implements the chosen architecture |
 | Drizzle down migrations | RESOLVED by TD-018 revised — V1 prefers FORWARD CORRECTIVE migrations over automatic down migrations. Down migrations are retained only for purely additive migrations (add column, add table, add index) where the up is reversible without data loss. For destructive or transformative migrations, forward correction is the rollback path. | CLOSED in S6 |
 
 **BLOCKING technical decisions: 0.**
@@ -2428,8 +2545,8 @@ The following S6 decisions are structuring enough to warrant durable ADR treatme
 | TD-021 | Free text for Entreprises/Secteurs/Catégories (no CRUD modules) | Bounds future scope |
 | TD-024 | Testing architecture (Vitest + RTL + Playwright, real DB in integration) | Affects all tests |
 | TD-028 | CSRF via Next.js Server Actions origin check + SameSite=Lax | Security-relevant |
-| TD-030 | @neondatabase/serverless driver (matched to V1's short transactions; no TCP driver) | Affects all DB connection code |
-| TD-031 | In-memory login rate limiting (no DB, no external service) | Security-relevant; coupled to TD-003 |
+| TD-030 | drizzle-orm/neon-http (HTTP-based, matched to V1's short transactions; explicit binding, no WebSocket/TCP) | Affects all DB connection code |
+| TD-031 | Better Auth integrated rate limiter + database storage on Neon (NOT in-memory, NOT Redis, NOT custom module) | Security-relevant; coupled to TD-003; serverless-compatible |
 
 The remaining TDs (TD-002, TD-005, TD-007, TD-008, TD-010, TD-011, TD-012, TD-015, TD-016, TD-017, TD-022, TD-023, TD-025, TD-026, TD-027, TD-029) are either MANDATED (not choices — TD-002) or implementation details / standard tool choices that don't need durable ADR treatment.
 
@@ -2456,7 +2573,7 @@ S6 hands off to S7 (Project Manifest + ADR):
   - PostgreSQL ILIKE search via Server Component + searchParams (TD-016 revised)
   - Drizzle Kit migrations with forward corrective doctrine (TD-018 revised)
   - Idempotent bootstrap separate from demo seed (TD-020 revised)
-  - In-memory login rate limiting (TD-031)
+  - Better Auth integrated rate limiter + database storage on Neon (TD-031 finalized)
   - No public API, no notifications, no automatic expiration, no physical deletion, no multi-tenant, no multilingual, no complex RBAC (all per S5)
   - AISE S0 invariants: §13, §14/§21, §23, §24, §25
 
@@ -2479,7 +2596,7 @@ S6 does NOT create ADR files. S7 creates the durable ADR files based on this han
 
 Per AISE S6 §30, the baseline is NOT valid until OWNER explicitly approves it. OWNER's absence of objection is NOT approval — explicit acknowledgment is required.
 
-### 29.1 Quality gate self-check (per S6 §34, revised per OWNER §14)
+### 29.1 Quality gate self-check (per S6 §34, revised per OWNER §14 + final patch §5)
 
 | Check | Result |
 |---|---|
@@ -2489,17 +2606,29 @@ Per AISE S6 §30, the baseline is NOT valid until OWNER explicitly approves it. 
 | S6 decisions contradicting S5 | 0 (no S5 requirement altered; all decisions preserve S5 semantics) |
 | Unjustified major technical complexity | 0 (modular monolith, single DB, no cache, no async infra, no external API — all per OWNER S6 anti-overengineering) |
 | Mandated constraints ignored | 0 (all MANDATED constraints applied: React, Next.js, TS, App Router, Vercel, Neon, Production/Preview isolation) |
-| **PREFERENCE silently converted to MANDATED (OWNER §1)** | **0** — Zod, Tailwind, pnpm, Better Auth, Drizzle, TanStack Query, React Hook Form, shadcn/ui are all DECIDED (Section 2.3), not MANDATED. Each has rationale. |
-| **Auth/session incompatibility (OWNER §14)** | **0** — Better Auth + Drizzle adapter + database sessions are compatible (TD-003 revised); no Auth.js/bcrypt remnants; no bcrypt/bcryptjs dependency (TD-009 revised). |
-| **Auth choice deferred to S10 (OWNER §14)** | **0** — TD-003 revised is DECIDED in S6. S10 implements, does not re-choose. |
-| **Tiptap rendering contradiction (OWNER §14)** | **0** — TD-013 revised uses Tiptap React server-side renderer (no HTML string roundtrip, no dangerouslySetInnerHTML with user content). The contract is internally consistent. |
+| PREFERENCE silently converted to MANDATED (OWNER §1) | 0 — Zod, Tailwind, pnpm, Better Auth, Drizzle, TanStack Query, React Hook Form, shadcn/ui are all DECIDED (Section 2.3), not MANDATED. Each has rationale. |
+| Auth/session incompatibility (OWNER §14) | 0 — Better Auth + Drizzle adapter + database sessions are compatible (TD-003 finalized); no Auth.js/bcrypt remnants; no bcrypt/bcryptjs dependency (TD-009 revised). |
+| Auth choice deferred to S10 (OWNER §14) | 0 — TD-003 finalized is DECIDED in S6. S10 implements, does not re-choose. |
+| Tiptap rendering contradiction (OWNER §14) | 0 — TD-013 revised uses Tiptap React server-side renderer (no HTML string roundtrip, no dangerouslySetInnerHTML with user content). The contract is internally consistent. |
 | Critical NFRs without realization | 0 (NFR-001 perf, NFR-010/011/012/013 security, NFR-030 accessibility, NFR-040 French, NFR-050 audit, NFR-060 integrity — all realized, Section 24.5) |
 | Critical boundaries without verification | 0 (auth boundary, public visibility boundary, secret boundary, Preview/Production boundary, auth-vs-authorization separation — all have verification in Section 24 and TD-019/Section 13) |
 | Major decisions without rationale | 0 (every TD-NNN has rationale linked to requirement or OWNER decision) |
-| **Separation auth/authorization clear (OWNER §14)** | **YES** — Better Auth authenticates; `can()` / `requireCapability()` authorizes independently (Section 13.2). |
-| **Fantomas still conformant (OWNER §14)** | **YES** — capability matrix Section 13.3 satisfies AISE §21 (Fantomas inherits ADMIN capabilities + extra; ADMIN does not inherit Fantomas-only). |
-| **Drizzle/Neon coherent (OWNER §14)** | **YES** — TD-004 (Drizzle) + TD-030 (@neondatabase/serverless, matched to V1's short transactions). |
-| **Production/Preview coherent (OWNER §14)** | **YES** — TD-019 + Section 20 strict isolation + target verification. |
+| Separation auth/authorization clear (OWNER §14) | YES — Better Auth authenticates; `can()` / `requireCapability()` authorizes independently (Section 13.2). Better Auth Admin plugin is NOT the business authorization system. |
+| Fantomas still conformant (OWNER §14) | YES — capability matrix Section 13.3 satisfies AISE §21 (Fantomas inherits ADMIN capabilities + extra; ADMIN does not inherit Fantomas-only). |
+| Drizzle/Neon coherent (OWNER §14) | YES — TD-004 (Drizzle) + TD-030 finalized (drizzle-orm/neon-http, matched to V1's short transactions; explicit binding choice, not "HTTP/WebSockets"). |
+| Production/Preview coherent (OWNER §14) | YES — TD-019 + Section 20 strict isolation + target verification. |
+| **Rate limiting compatible with Vercel serverless (OWNER final patch §5)** | **YES** — TD-031 finalized: Better Auth integrated rate limiter + database storage on Neon. NOT in-memory (per-instance counter is not serverless-compatible). NOT Redis. No custom module. |
+| **No Redis added (OWNER final patch §5)** | **YES** — no Redis, no Vercel KV, no Upstash. Rate limiting uses the same Neon DB as the rest of V1. |
+| **Username plugin explicitly defined (OWNER final patch §5)** | **YES** — TD-003 finalized explicitly names the Better Auth Username plugin; daily login identifier is username (NOT email); Section 12.2 documents the credential model. |
+| **Login Fantomas technically feasible (OWNER final patch §5)** | **YES** — Fantomas logs in with username "Fantomas" via the Username plugin endpoint (`auth.api.signInUsername`). The bootstrap script creates Fantomas with this username via `auth.api.createUser()`. |
+| **Public signup disabled (OWNER final patch §5)** | **YES** — `emailAndPassword.signUp.disabled = true`; no /sign-up endpoint; users created ONLY via bootstrap. |
+| **Bootstrap compatible with Better Auth (OWNER final patch §5)** | **YES** — TD-003 finalized + TD-020 revised + Section 12.5: bootstrap calls `auth.api.createUser()` (Better Auth's SUPPORTED server-side user creation API). Better Auth handles hashing + DB writes. |
+| **No manual password hash INSERT (OWNER final patch §5)** | **YES** — the bootstrap script does NOT manually INSERT password hashes, does NOT bypass Better Auth, does NOT write to the DB directly. All DB writes go through `auth.api.createUser()`. |
+| **Drizzle/Neon driver unique and clearly decided (OWNER final patch §5)** | **YES** — TD-030 finalized: drizzle-orm/neon-http (HTTP-based). NOT "HTTP/WebSockets" as two possibilities. Explicit single binding. |
+| **can()/requireCapability() independent of Better Auth (OWNER final patch §5)** | **YES** — Section 13.2: the authorization layer reads only the `role` field from the session; it does not import Better Auth types or call Better Auth functions for capability checks. The mapping from Better Auth session to our `Principal` type is the ONLY place where Better Auth is imported in the authorization layer. |
+| **0 OPEN (OWNER final patch §5)** | **YES** — 0 OPEN status; 0 non-blocking open technical decisions (Section 26 — all CLOSED in S6). |
+| **0 PROVISIONAL (OWNER final patch §5)** | **YES** — 0 PROVISIONAL status. |
+| **No other architecture modified (OWNER final patch §5)** | **YES** — only TD-003 (auth + bootstrap), TD-030 (driver), TD-031 (rate limiting), Section 12 (auth flows), Section 14.10 (rate limiting), Section 7.1/7.2 (stack summary), Section 9.3.2 (auth tables note), module map (Section 6) were updated. All other TDs and architecture decisions are unchanged from the previous revision. |
 
 **Verdict: QUALITY GATE PASS. S6 is READY FOR OWNER APPROVAL.**
 
@@ -2508,10 +2637,10 @@ Per AISE S6 §30, the baseline is NOT valid until OWNER explicitly approves it. 
 When presenting to OWNER for approval, S6 summarizes:
 
 - **Architecture**: Modular monolith Next.js full-stack (TD-001). Single app, single DB, no microservices, no cache, no external API.
-- **Major stack choices**: Drizzle ORM (TD-004, DECIDED); Better Auth (TD-003 revised, DECIDED — replaces Auth.js); scrypt via Better Auth default (TD-009 revised — replaces bcrypt); Tiptap JSON + React server-side renderer (TD-013 revised — no HTML string roundtrip); Tailwind + shadcn/ui (TD-010, TD-011, both DECIDED — reclassified from MANDATED); pnpm (TD-017, DECIDED); Zod (TD-008, DECIDED); Vitest + RTL + Playwright (TD-024); @neondatabase/serverless driver (TD-030, added).
+- **Major stack choices**: Drizzle ORM (TD-004, DECIDED); Better Auth (TD-003 finalized, DECIDED — Username plugin + emailAndPassword, replaces Auth.js); scrypt via Better Auth default (TD-009 revised — replaces bcrypt); Tiptap JSON + React server-side renderer (TD-013 revised — no HTML string roundtrip); Tailwind + shadcn/ui (TD-010, TD-011, both DECIDED — reclassified from MANDATED); pnpm (TD-017, DECIDED); Zod (TD-008, DECIDED); Vitest + RTL + Playwright (TD-024); drizzle-orm/neon-http (TD-030 finalized); Better Auth integrated rate limiter + database storage on Neon (TD-031 finalized).
 - **Data design**: offers table (Section 9.3.1) + Better Auth standard tables (user, session, account, verification) with V1 `role` extension on user (Section 9.3.2 — Better Auth manages these tables; S6 documents the expected shape). Free text for Entreprises/Secteurs/Catégories (TD-021). UUID ids (TD-015). 4-state enum for offer status.
 - **Integration model**: No external integration in V1 (INT-001).
-- **Auth/security**: Better Auth + database sessions + sign-up disabled; Fantomas via idempotent bootstrap script + env var (TD-020 revised — separate from demo seed); `can()` / `requireCapability()` capability abstraction per AISE §21 (Section 13) — INDEPENDENT of the auth library (OWNER §2 separation of concerns); in-memory login rate limiting (TD-031, added).
+- **Auth/security**: Better Auth (Username plugin + emailAndPassword) + database sessions + sign-up disabled; Fantomas via idempotent bootstrap script calling `auth.api.createUser()` + env var (TD-020 revised — separate from demo seed); `can()` / `requireCapability()` capability abstraction per AISE §21 (Section 13) — INDEPENDENT of the auth library (OWNER §2 separation of concerns); Better Auth integrated rate limiter with database storage on Neon (TD-031 finalized — NOT in-memory, NOT Redis).
 - **Deployment**: Vercel Production + Preview with Neon main + preview branches (TD-019, strict isolation + target verification per Section 20.4). No Docker/K8s.
 - **Migration doctrine (TD-018 revised)**: schema source-controlled; migrations generated and reviewed; applied controlled (never `drizzle-kit push` against Production); forward corrective migrations preferred over down migrations; seed vs bootstrap distinction (OWNER §12).
 - **Testing**: Vitest (unit + component + integration with REAL DB, no DB mocking) + Playwright (E2E critical journey per OWNER S6 §21).
