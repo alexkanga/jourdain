@@ -1,7 +1,7 @@
 # PROJECT MANIFEST — JOURDAIN EMPLOI V1
 
-**Status:** DRAFT — PENDING OWNER APPROVAL
-**Date:** 2026-09-15
+**Status:** OWNER APPROVED — S7 CLOSED / PASS
+**Date:** 2026-09-15 (created), 2026-09-15 (OWNER APPROVED)
 **Project:** JOURDAIN EMPLOI V1
 **Canonical repository:** `github.com/alexkanga/jourdain`
 
@@ -13,7 +13,7 @@
 |---|---|
 | Project | JOURDAIN EMPLOI |
 | Version | V1 |
-| Status | DRAFT — PENDING OWNER APPROVAL |
+| Status | OWNER APPROVED — S7 CLOSED / PASS |
 | Source Charter | `docs/planning/PROJECT_CHARTER.md` — APPROVED at `fa377c1` (2026-09-13) |
 | Source Product Requirements | `docs/product/PRODUCT_REQUIREMENTS.md` — APPROVED at `9ec4a08` (2026-09-14) |
 | Source Technical Specification | `docs/architecture/TECHNICAL_SPECIFICATION.md` — APPROVED at `7c85323` (2026-09-15) |
