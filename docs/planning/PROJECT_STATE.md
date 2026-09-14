@@ -8,8 +8,8 @@ control plane) to understand where the project stands.
 ## Current phase
 
 PROJECT:                JOURDAIN EMPLOI
-AISE PHASE:             S7 — PROJECT MANIFEST + ADR
-STATUS:                 CLOSED PASS — PROJECT MANIFEST AND ADRS APPROVED
+AISE PHASE:             S8 — DELIVERY ROADMAP
+STATUS:                 CLOSED PASS — DELIVERY ROADMAP APPROVED
 CHARTER APPROVED:       YES
 CHARTER PATH:           docs/planning/PROJECT_CHARTER.md
 CHARTER APPROVAL DATE:  2026-09-13
@@ -24,22 +24,28 @@ PROJECT MANIFEST PATH:  docs/architecture/PROJECT_MANIFEST.md
 PROJECT MANIFEST APPROVAL DATE: 2026-09-15
 ADR COUNT:              10 (ADR-0001 through ADR-0010, all ACCEPTED)
 ADR PATH:               docs/architecture/adr/
+DELIVERY ROADMAP APPROVED: YES
+DELIVERY ROADMAP PATH:  docs/planning/DELIVERY_ROADMAP.md
+DELIVERY ROADMAP APPROVAL DATE: 2026-09-15
+MILESTONE COUNT:        7 (MS-001 through MS-007)
+FUTURE WORK PACKAGE COUNT: 7 (WP-Foundation, WP-DatabaseAuth, WP-AdminOffers, WP-PublicPortal, WP-E2EHardening, WP-EnvironmentsCICD, WP-ReleaseReadiness — NOT YET AUTHORIZED)
+S9 FIRST CANDIDATE:     MS-001 — Application Foundation
 CANONICAL BRANCH:       main
-CANONICAL HEAD:         0b8b436754d0508f745d2579a3c3b80e76491420
+CANONICAL HEAD:         2796c2d0cd76673c2ab4ecfdc8357c01f0c1a88a
 REMOTE:                 configured (origin → git@github.com-aise-alexkanga-jourdain:alexkanga/jourdain.git)
-REMOTE HEAD:            0b8b436754d0508f745d2579a3c3b80e76491420
+REMOTE HEAD:            2796c2d0cd76673c2ab4ecfdc8357c01f0c1a88a
 LOCAL = REMOTE:         YES
 AISE SOURCE COMMIT:     2991df51c1fa692f892452c361081c626f028cd0
-COMPLETED COMPONENTS:   S0, S1, S2, S3, S4, S5, S6, S7 installed and canonical
+COMPLETED COMPONENTS:   S0, S1, S2, S3, S4, S5, S6, S7, S8 installed and canonical
 PRODUCT DISCOVERY:      CLOSED PASS — CHARTER APPROVED (S4)
 PRODUCT REQUIREMENTS:   CLOSED PASS — PRODUCT REQUIREMENTS APPROVED (S5)
 TECHNICAL SPECIFICATION: CLOSED PASS — TECHNICAL SPECIFICATION APPROVED (S6)
 PROJECT MANIFEST/ADR:   CLOSED PASS — PROJECT MANIFEST AND ADRS APPROVED (S7)
-ROADMAP:                NOT STARTED (S8)
+DELIVERY ROADMAP:        CLOSED PASS — DELIVERY ROADMAP APPROVED (S8)
 IMPLEMENTATION:         NOT STARTED (S10)
-DEFERRED DECISIONS:     Charter-level: D1 (GDPR details — deferred to future), D2 (migration scope — only if needed), D3 (data residency — deferred to future). S5-level: DR-030/040 (full audit log — future), DR-050 (admin UI — future), DR-051 (SUPER_ADMIN role — future), DR-160 (GDPR — deferred per Charter D1), DR-170 (data residency — deferred per Charter D3). All explicitly non-blocking for S8 or V1.
+DEFERRED DECISIONS:     Charter-level: D1 (GDPR details — future), D2 (migration scope — only if needed), D3 (data residency — future). S5-level: DR-030/040 (full audit log — future), DR-050 (admin UI — future), DR-051 (SUPER_ADMIN role — future), DR-160 (GDPR — future), DR-170 (data residency — future). All explicitly non-blocking for S9 or V1.
 NEXT AUTHORIZED:        NONE until OWNER GO
-NEXT RECOMMENDED:       S8 — Roadmap / Milestone Design
+NEXT RECOMMENDED:       S9 — Module Contract / Work Package
 
 ## What exists
 
@@ -222,8 +228,8 @@ Architectural constraint (OWNER-stated):
 
 ## Stop contract
 
-S7 is CLOSED / PASS — PROJECT MANIFEST AND ADRS APPROVED. S8 has NOT
-started. S8 begins only after explicit OWNER GO.
+S8 is CLOSED / PASS — DELIVERY ROADMAP APPROVED. S9 has NOT
+started. S9 begins only after explicit OWNER GO.
 
-NEXT RECOMMENDED COMPONENT: S8 — Roadmap / Milestone Design
+NEXT RECOMMENDED COMPONENT: S9 — Module Contract / Work Package
 NEXT ACTION: OWNER GO REQUIRED

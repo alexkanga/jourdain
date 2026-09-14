@@ -1,7 +1,7 @@
 # DELIVERY ROADMAP — JOURDAIN EMPLOI V1
 
-**Status:** DRAFT — PENDING OWNER APPROVAL
-**Date:** 2026-09-15
+**Status:** OWNER APPROVED — S8 CLOSED / PASS
+**Date:** 2026-09-15 (created), 2026-09-15 (OWNER APPROVED)
 **Project:** JOURDAIN EMPLOI V1
 **Canonical repository:** `github.com/alexkanga/jourdain`
 
@@ -13,7 +13,7 @@
 |---|---|
 | Project | JOURDAIN EMPLOI |
 | Version | V1 |
-| Status | DRAFT — PENDING OWNER APPROVAL |
+| Status | OWNER APPROVED — S8 CLOSED / PASS |
 | Source Charter (S4) | `docs/planning/PROJECT_CHARTER.md` — APPROVED at `fa377c1` (2026-09-13) |
 | Source Product Requirements (S5) | `docs/product/PRODUCT_REQUIREMENTS.md` — APPROVED at `9ec4a08` (2026-09-14) |
 | Source Technical Specification (S6) | `docs/architecture/TECHNICAL_SPECIFICATION.md` — APPROVED at `7c85323` (2026-09-15) |
@@ -726,8 +726,8 @@ S9 has NOT started. S9 begins only after explicit OWNER GO.
 
 | Field | Value |
 |---|---|
-| Document status | DRAFT — PENDING OWNER APPROVAL |
-| Roadmap status | DRAFT |
+| Document status | OWNER APPROVED — S8 CLOSED / PASS |
+| Roadmap status | APPROVED |
 | Milestone count | 7 (MS-001 through MS-007) |
 | Unassigned release requirements | 0 |
 | Milestones without justification | 0 |
@@ -739,9 +739,9 @@ S9 has NOT started. S9 begins only after explicit OWNER GO.
 | S9-level detail leakage | 0 (no file lists, no exact test scenarios, no ticket breakdowns) |
 | S9 first candidate | MS-001 — Application Foundation |
 | Next recommended component | S9 — Module Contract / Work Package |
-| OWNER approval | PENDING |
+| OWNER approval | APPROVED (2026-09-15) |
 
-Per AISE S8 §32, the roadmap is NOT valid until OWNER explicitly approves it.
+Per AISE S8 §32, the roadmap was NOT valid until OWNER explicitly approved it. OWNER has now explicitly approved it on 2026-09-15.
 
 ### Quality Gate Self-Check (per S8 §38)
 
