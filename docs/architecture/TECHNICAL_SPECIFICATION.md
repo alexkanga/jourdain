@@ -1,14 +1,14 @@
 # TECHNICAL SPECIFICATION — JOURDAIN EMPLOI V1
 
 **Document type:** AISE S6 — Technical Specification
-**Status:** DRAFT — PENDING OWNER APPROVAL
-**Date:** 2026-09-14
+**Status:** FINAL DRAFT — READY FOR OWNER APPROVAL
+**Date:** 2026-09-14 (initial draft), 2026-09-15 (revised after OWNER revision decisions §1–§15)
 **Project:** JOURDAIN EMPLOI V1
 **Canonical repository:** `github.com/alexkanga/jourdain`
 **Canonical branch:** `main`
 **Charter-approved HEAD (source S4):** `fa377c1feba5a111c07e0f40d094245fdadc727d`
 **Product-requirements-approved HEAD (source S5):** `9ec4a08b467a4a3909fa9bc0a72bf02e4c682418`
-**S6 draft HEAD at start:** `dfe91621f94a0cdc6368707bc3a3f0416b455f74`
+**Initial S6 draft HEAD:** `bb6c976b47648fc73ac2228d023994b388d3ad4f`
 
 This document is governed by AISE protocol S6 (`docs/engineering/AISE_TECHNICAL_SPECIFICATION.md`). It defines **how the approved product requirements are technically realized** — not what (S5) and not why (S4).
 
@@ -33,10 +33,11 @@ Silent conversions are forbidden (S6 §4):
 |---|---|
 | Project | JOURDAIN EMPLOI |
 | AISE Stage | S6 — Technical Specification |
-| Status | DRAFT — PENDING OWNER APPROVAL |
+| Status | FINAL DRAFT — READY FOR OWNER APPROVAL |
 | Source Charter | `docs/planning/PROJECT_CHARTER.md` — APPROVED 2026-09-13 at `fa377c1` |
 | Source Product Requirements | `docs/product/PRODUCT_REQUIREMENTS.md` — APPROVED 2026-09-14 at `9ec4a08` |
-| S6 draft date | 2026-09-14 |
+| S6 initial draft date | 2026-09-14 |
+| S6 revision date | 2026-09-15 (after OWNER revision decisions §1–§15) |
 | S6 OWNER approval | PENDING |
 | Next recommended component | S7 — Project Manifest + ADR |
 
@@ -51,34 +52,42 @@ Per AISE S6 §30, the baseline is NOT valid until OWNER explicitly approves it.
 - **Charter** (`fa377c1`): JOURDAIN EMPLOI V1 is a simple, mono-tenant web portal for publishing and consulting job offers. Single ADMIN role, no complex RBAC, no notifications, no API publique, no multilingual, no multi-tenant. Fantomas principal mandated by AISE §14/§21.
 - **Product Requirements** (`9ec4a08`): 65 CONFIRMED requirements (30 FR + 21 BR + 4 PERM + 1 INT + 9 NFR), 60 MUST + 5 SHOULD. 4-state offer lifecycle (DRAFT, PUBLISHED, SUSPENDED, ARCHIVED — terminal). 21 offer business fields. No public API, no notifications, no automatic expiration, no physical deletion.
 
-### 2.2 OWNER-mandated technical constraints (MANDATED, not S6 optimization choices)
+### 2.2 OWNER-mandated technical constraints (MANDATED)
+
+These constraints are explicitly stated in the APPROVED Charter §10 as hard requirements (not preferences). S6 documents them and applies them; they are NOT S6 optimization choices.
 
 | Constraint | Source | Implication |
 |---|---|---|
-| React | Charter §10, OWNER S6 §1 | UI library |
-| Next.js | Charter §10, OWNER S6 §1 | Web framework |
-| TypeScript | Charter §10, OWNER S6 §1 | Language |
-| Next.js App Router | Charter §10, OWNER S6 §1 | Routing model |
-| Vercel | Charter §10, OWNER S6 §1 | Hosting platform |
-| PostgreSQL Neon | Charter §10, OWNER S6 §1 | Database |
-| Production separated from Preview | Charter §10, OWNER S6 §13 | Environment isolation |
-| No microservices / K8s / Kafka / ES / Redis / event bus / distributed architecture without demonstrated need | Charter §10, OWNER S6 anti-overengineering | Monolith modular full-stack |
+| React | Charter §10 (CONFIRMED) | UI library |
+| Next.js | Charter §10 (CONFIRMED) | Web framework |
+| TypeScript | Charter §10 (CONFIRMED) | Language |
+| Next.js App Router | Charter §10 (CONFIRMED) | Routing model |
+| Vercel | Charter §10 (CONFIRMED) | Hosting platform |
+| PostgreSQL Neon | Charter §10 (CONFIRMED) | Database |
+| Production environment separated from Preview | Charter §10 (CONFIRMED constraint) | Environment isolation |
+| No microservices / K8s / Kafka / ES / Redis / event bus / distributed architecture without demonstrated need | Charter §10 (CONFIRMED) | Modular monolith full-stack |
 | AISE S0 §13 (no secrets in repo) | S0 FROZEN | All secrets via §25 External Parameter Gate |
 | AISE S0 §14/§21 (Fantomas) | S0 FROZEN | Break-glass principal with full SUPER_ADMIN + specific capabilities |
 | AISE S0 §23 (zero scheduled work) | S0 FROZEN | No cron, no background jobs, no auto-expiration |
 | AISE S0 §24 (contract preservation) | S0 FROZEN | Never adapt valid evidence to defective implementation |
 | AISE S0 §25 (external parameter gate) | S0 FROZEN | Secrets requested only at exact boundary where required |
 
-### 2.3 Confirmed technical preferences (OWNER-stated, evaluated and decided in S6)
+### 2.3 OWNER-stated technical preferences (PREFERENCE, evaluated and DECIDED in S6)
 
-| Preference | Source | S6 decision (see Section 5) |
-|---|---|---|
-| Drizzle ou Prisma | Charter §10, OWNER S6 §1 | TD-004 — see evaluation |
-| Zod | Charter §10, OWNER S6 §1 | TD-008 — accepted |
-| TanStack Query | Charter §10, OWNER S6 §1 | TD-006 — see evaluation (only if justified) |
-| React Hook Form | Charter §10, OWNER S6 §1 | TD-007 — see evaluation |
-| Tailwind CSS | Charter §10, OWNER S6 §1 | TD-010 — accepted |
-| shadcn/ui | Charter §10, OWNER S6 §1 | TD-011 — see evaluation |
+These items are OWNER preferences (Charter §10 "Outils envisagés autour de Next.js" + OWNER S6 §1), NOT absolute mandates. S6 has evaluated each one against the V1 requirements and made a decision. The decision status is **DECIDED** (not MANDATED) because each was a real choice with viable alternatives, and S6 retained the option that best fits V1 needs.
+
+| Preference | Source | Viable alternatives evaluated | S6 decision | Decision ID | Status |
+|---|---|---|---|---|---|
+| Drizzle ou Prisma | Charter §10, OWNER S6 §1 | Prisma | Drizzle ORM | TD-004 | DECIDED |
+| Zod | Charter §10, OWNER S6 §1 | Yup, Valibot, io-ts | Zod | TD-008 | DECIDED |
+| TanStack Query | Charter §10, OWNER S6 §1 | React Query (synonym), SWR, none | None in V1 (Server Components + Server Actions suffice) | TD-006 | DECIDED |
+| React Hook Form | Charter §10, OWNER S6 §1 | Native form + FormData, Formik | React Hook Form | TD-007 | DECIDED |
+| Tailwind CSS | Charter §10, OWNER S6 §1 | CSS Modules, vanilla-extract, styled-components | Tailwind CSS | TD-010 | DECIDED |
+| shadcn/ui | Charter §10, OWNER S6 §1 | Composants maison, MUI, Chakra | shadcn/ui (selective adoption) | TD-011 | DECIDED |
+| pnpm | OWNER S6 §28 ("recommandé") | npm, yarn, bun | pnpm | TD-017 | DECIDED |
+| Better Auth | OWNER S6 §2 (revision §2) | Auth.js v5, custom auth | Better Auth | TD-003 (revised) | DECIDED |
+
+**Important — AISE distinction (OWNER revision §1):** S6 must NOT silently convert a PREFERENCE into a MANDATED constraint. Zod, Tailwind, pnpm, Better Auth, Drizzle, TanStack Query, React Hook Form, shadcn/ui are all DECIDED, not MANDATED. Each has a rationale in Section 5. If a future change of requirements or evidence makes another option better, S7 can revisit the decision through AISE change control (R6 if it touches a FROZEN rule). PostgreSQL/Neon, React/Next.js/TypeScript/App Router/Vercel are MANDATED because the Charter explicitly states them as hard requirements.
 
 ### 2.4 Anti-overengineering principles (OWNER S6 anti-overengineering + S6 §6, §36)
 
@@ -117,13 +126,14 @@ There is no third-party authentication provider, no payment provider, no email p
 
 | Boundary | Mechanism |
 |---|---|
-| Public → Admin pages | Authentication required (server-side check) |
+| Public → Admin pages | Authentication required (Better Auth middleware + layout guard per Section 13.4) |
 | Public → Offer data (non-PUBLISHED) | Server-side status filter; non-PUBLISHED offers return 404 on public URLs |
-| Admin mutations | Server Actions with auth check + Zod validation |
-| Form input → DB | Server-side Zod validation; client validation is UX-only |
-| Description rich content | Server-side sanitization on input + safe rendering on output |
+| Admin mutations | Server Actions with `requireCapability()` check (Section 13) + Zod validation |
+| Form input → DB | Server-side Zod validation (TD-008); client validation is UX-only |
+| Description rich content | Tiptap JSON stored (no raw HTML in DB); rendered via Tiptap React server-side renderer (no `dangerouslySetInnerHTML` with user content) — TD-013 revised |
 | Secrets → Code | S0 §13 + S0 §25; secrets via environment variables only |
-| Preview env → Production DB | Strict isolation via distinct `DATABASE_URL` env vars per Vercel environment |
+| Preview env → Production DB | Strict isolation via distinct `DATABASE_URL` env vars per Vercel environment (TD-019); target verification before any write (S0 §25) |
+| Authorization vs Authentication | Better Auth authenticates (verifies credentials, manages sessions); `can()` / `requireCapability()` authorizes (checks capabilities per AISE §21) — independent layers per OWNER §2 |
 
 ---
 
@@ -225,32 +235,68 @@ STATUS:         MANDATED
 ### TD-003 — Authentication architecture
 
 ```
-TD-003: Authentication Architecture
+TD-003: Authentication Architecture (revised per OWNER §2)
 DECISION AREA:  ADMIN and Fantomas authentication
 REQUIREMENTS:   FR-001 (login), FR-002 (logout), FR-003 (back-office denied to public),
                 FR-004 (no public registration), NFR-010 (no plaintext password),
                 NFR-011 (no password in repo), NFR-012 (session protection),
                 NFR-013 (Fantomas credential handling), PERM-003 (back-office restricted),
                 Charter §7 (Fantomas), AISE S0 §14/§21
-OPTIONS:        Better Auth | Auth.js (NextAuth) | Lightweight custom session-based auth
-SELECTED:       Auth.js (NextAuth) with Credentials provider + bcrypt password hashing
-                + httpOnly session cookie
-RATIONALE:      - Better Auth (newer, less mature ecosystem as of late 2025; smaller
-                  community; risk of API churn during V1 development)
-                - Auth.js (NextAuth v5): mature, large ecosystem, well-documented,
-                  supports Credentials provider for username+password, integrates
-                  natively with Next.js App Router middleware for route protection,
-                  session via JWT or database strategy. Database strategy with
-                  sessions table fits a stateful admin back-office.
-                - Custom auth: requires implementing session management, CSRF
-                  protection, password hashing, secure cookie flags — fragile and
-                  not justified when Auth.js covers all needs.
-                Auth.js Credentials provider + bcrypt + httpOnly cookie + database
-                session strategy is the simplest mature solution that meets
-                NFR-010/011/012 and supports the bootstrap of Fantomas (NFR-013).
-CONSEQUENCES:   Sessions table in DB. bcrypt for password hashing (TD-009).
-                Auth.js middleware protects /admin/* routes. Fantomas is just another
-                user record with a special role flag, bootstrapped at seed time.
+OPTIONS:        Better Auth | Auth.js (NextAuth v5) | Lightweight custom session-based auth
+SELECTED:       Better Auth (with Drizzle adapter, PostgreSQL Neon, email/username+password
+                credentials, database sessions, public sign-up disabled)
+RATIONALE:      OWNER revision §2 explicitly directs S6 to evaluate Better Auth and retain
+                it if its current integration verifies the V1 needs more directly.
+                V1 needs (per OWNER §2):
+                - Next.js App Router — Better Auth has first-class Next.js App Router support
+                - email/password and username/password — Better Auth supports both natively
+                  via `username()` plugin (Fantomas logs in by username "Fantomas", ADMIN by
+                  login identifier — both supported as username credentials)
+                - Drizzle adapter for PostgreSQL — Better Auth has an official Drizzle adapter
+                  (`better-auth/adapters/drizzle`) compatible with Neon serverless driver
+                - Sessions persisted in DB — Better Auth uses database sessions by default
+                  (session table in the auth schema)
+                - Disable public sign-up — Better Auth `signUp` is disableable via
+                  config (`emailAndPassword.signUp.disabled` or by omitting the signUp
+                  endpoint); V1 has no public registration per FR-004
+                - Extend user with role/principal — Better Auth user schema is extensible
+                  via `user.model` additional fields; we add `role` column
+                  (enum: 'admin' | 'fantomas')
+                - Protect server actions — Better Auth provides `auth.api.getSession()`
+                  server-side; combined with our `requireCapability()` wrapper (Section 13)
+                  for authorization
+                - Logout — Better Auth provides `auth.api.signOut()`
+                - Bootstrap controlled — Better Auth does not impose a bootstrap mechanism;
+                  our idempotent seed script (TD-020) creates Fantomas + initial ADMIN via
+                  Better Auth's `auth.api.createUser()` server-side (no public sign-up)
+
+                Comparison with rejected alternatives:
+                - Auth.js v5: mature but Credentials provider is explicitly discouraged in
+                  its docs for database-backed auth; the database-session strategy works
+                  but the integration with Drizzle requires the @auth/drizzle-adapter
+                  which is less actively maintained than Better Auth's adapter. Better Auth
+                  is more aligned with the V1 stack (Drizzle-first, Next.js App Router-first).
+                - Custom auth: requires implementing session management, CSRF protection,
+                  password hashing, secure cookie flags — fragile and not justified when
+                  Better Auth covers all needs with a smaller surface than Auth.js.
+
+                Password hashing: Better Auth uses scrypt by default (Node.js built-in
+                crypto.scrypt — no native binding, no Vercel build concern). This removes
+                the bcrypt-vs-bcryptjs open question (Owner §7) — it disappears entirely.
+                The hash is stored in the user record by Better Auth automatically.
+
+                IMPORTANT — Separation of concerns (OWNER §2): Better Auth authenticates
+                (verifies credentials, manages sessions). Our `can()` / `requireCapability()`
+                layer (Section 13) authorizes (checks capabilities per AISE §21). The
+                authorization logic is independent of the auth library — Fantomas semantics
+                are preserved regardless of which library authenticates.
+CONSEQUENCES:   Better Auth Drizzle adapter generates the auth tables (user, session,
+                account, verification) — S6 does NOT redefine these tables (Section 13
+                per OWNER revision §13). The `users` table is extended with a `role` column
+                (enum: 'admin' | 'fantomas'). The `can()` / `requireCapability()` abstraction
+                lives in lib/server/auth.ts and wraps Better Auth's `getSession()`.
+                No bcrypt dependency (Better Auth uses scrypt by default). No bcryptjs
+                fallback needed.
 ADR CANDIDATE:  YES
 STATUS:         DECIDED
 ```
@@ -363,62 +409,89 @@ STATUS:         DECIDED
 ### TD-008 — Validation library
 
 ```
-TD-008: Validation Library
+TD-008: Validation Library (reclassified per OWNER revision §1)
 DECISION AREA:  Server-side input validation
-REQUIREMENTS:   BR-030 (required fields), BR-080 (URL/email format), OWNER S6 §1 (Zod),
-                S5 §11 (server validation is the authority)
+REQUIREMENTS:   BR-030 (required fields), BR-080 (URL/email format), OWNER S6 §1 (Zod
+                is a strong preference but not a mandate), S5 §11 (server validation
+                is the authority)
+OPTIONS:        Zod | Yup | Valibot | io-ts
 SELECTED:       Zod
-RATIONALE:      OWNER MANDATED preference (Charter §10, OWNER S6 §1). Zod is the de
-                facto standard for TypeScript-first schema validation. Pairs with
-                Drizzle (zodSchemas), React Hook Form (zodResolver), and Server
-                Actions (parse input server-side).
+RATIONALE:      OWNER stated Zod as an orientation, not a hard mandate. Among credible
+                candidates, Zod is the de facto standard for TypeScript-first schema
+                validation in 2025-2026:
+                - Zod: largest ecosystem, native TypeScript inference, pairs with
+                  Drizzle (drizzle-zod), React Hook Form (zodResolver), and Server
+                  Actions (parse input server-side). Best documentation.
+                - Yup: older, less TypeScript-native, smaller ecosystem in 2025.
+                - Valibot: smaller bundle but smaller ecosystem; API similar to Zod
+                  but less battle-tested.
+                - io-ts: functional-programming style, steeper learning curve, less
+                  aligned with the React/Next.js ecosystem.
+                Zod is the simplest choice that fits V1 (Drizzle + RHF + Server
+                Actions). This is a DECIDED choice, not a MANDATED constraint — if a
+                future requirement proves another library better, S7 can revisit.
 CONSEQUENCES:   All server-side validation uses Zod. Client-side mirrors via the same
-                schemas for UX.
-ADR CANDIDATE:  NO (MANDATED)
-STATUS:         MANDATED
-```
-
-### TD-009 — Password hashing mechanism
-
-```
-TD-009: Password Hashing Mechanism
-DECISION AREA:  ADMIN and Fantomas password storage
-REQUIREMENTS:   NFR-010 (no plaintext password; vetted mechanism)
-OPTIONS:        bcrypt | argon2id | scrypt | pbkdf2
-SELECTED:       bcrypt (with cost factor ≥ 12)
-RATIONALE:      - bcrypt: mature, well-vetted, widely supported in Node.js (bcrypt
-                  npm package), adjustable cost factor. Standard choice for
-                  server-side password hashing in 2025 for non-edge runtimes.
-                - argon2id: winner of PHC, more modern, better against GPU attacks.
-                  Requires native binding (argon2 npm package) — may complicate
-                  Vercel build. Recommended for high-security needs.
-                - scrypt: good but less commonly used in Node ecosystem.
-                - pbkdf2: built-in but less recommended than bcrypt/argon2.
-                For a small admin team (single-digit admins + 1 Fantomas), bcrypt with
-                cost 12 provides adequate security. argon2id is a better long-term
-                choice but adds build complexity on Vercel. V1 uses bcrypt; S2 (V2)
-                can migrate to argon2id if needed. The decision is reversible because
-                passwords can be re-hashed on next login.
-CONSEQUENCES:   bcrypt npm package. Cost factor 12. Hash column in users table.
-ADR CANDIDATE:  YES (security-relevant)
+                schemas for UX. Drizzle-zod can generate Zod schemas from the DB schema
+                to avoid duplication.
+ADR CANDIDATE:  NO (standard tool choice)
 STATUS:         DECIDED
 ```
 
-### TD-010 — Styling
+### TD-009 — Password hashing mechanism (revised per OWNER §2 and §7)
+
+```
+TD-009: Password Hashing Mechanism (revised)
+DECISION AREA:  ADMIN and Fantomas password storage
+REQUIREMENTS:   NFR-010 (no plaintext password; vetted mechanism)
+OPTIONS:        Better Auth default (scrypt) | bcrypt | argon2id
+SELECTED:       Better Auth default — scrypt (Node.js built-in crypto.scrypt)
+RATIONALE:      Per OWNER revision §2 and §7: with Better Auth retained as the auth
+                library (TD-003), the password hashing is delegated to Better Auth's
+                default mechanism. Better Auth uses scrypt by default (Node.js
+                crypto.scrypt — no native binding, no Vercel build concern, vetted
+                standard). The bcrypt-vs-bcryptjs open question from the initial draft
+                is therefore eliminated entirely (OWNER §7).
+                - scrypt (Better Auth default): vetted, memory-hard, no native dep,
+                  built into Node.js. Adequate for V1's small admin team.
+                - bcrypt: would require a separate bcrypt dependency (native binding
+                  or pure JS fallback). No advantage over scrypt for V1.
+                - argon2id: stronger against GPU attacks but requires a native binding
+                  with potential Vercel build issues. Overkill for V1.
+                This decision is coupled to TD-003 (Better Auth). If TD-003 changes
+                later, this decision is revisited.
+CONSEQUENCES:   No separate password-hashing dependency. Better Auth handles
+                hash/verify internally. The hash is stored in the user record (in
+                the `password` column managed by Better Auth's Drizzle adapter).
+                No `bcrypt` or `bcryptjs` npm package in the dependency tree.
+ADR CANDIDATE:  NO (coupled to TD-003)
+STATUS:         DECIDED
+```
+
+### TD-010 — Styling (reclassified per OWNER revision §1)
 
 ```
 TD-010: Styling
 DECISION AREA:  CSS / styling approach
-REQUIREMENTS:   NFR-030 (accessibility), OWNER S6 §1 (Tailwind CSS), OWNER S6 §24
-                (simple, sobre, mobile responsive)
+REQUIREMENTS:   NFR-030 (accessibility), OWNER S6 §1 (Tailwind CSS as preference,
+                not mandate), OWNER S6 §24 (simple, sobre, mobile responsive)
+OPTIONS:        Tailwind CSS | CSS Modules | vanilla-extract | styled-components
 SELECTED:       Tailwind CSS
-RATIONALE:      OWNER MANDATED. Tailwind provides utility-first styling with strong
-                accessibility defaults (focus states, screen-reader classes built-in),
-                small production CSS (only used utilities), and good integration with
-                shadcn/ui (TD-011). No need for a separate CSS-in-JS library.
+RATIONALE:      OWNER stated Tailwind as a preference, not a hard mandate (Charter §10
+                "Outils envisagés" + OWNER S6 §1). Among credible candidates:
+                - Tailwind CSS: utility-first, strong accessibility defaults
+                  (focus states, screen-reader classes), small production CSS,
+                  good integration with shadcn/ui (TD-011). Largest ecosystem in 2025.
+                - CSS Modules: native, no build dependency, but more verbose and
+                  less suited for a design-system approach.
+                - vanilla-extract: type-safe CSS-in-TS, good DX but smaller ecosystem.
+                - styled-components: runtime CSS-in-JS, performance overhead, less
+                  aligned with the RSC (React Server Components) model of Next.js
+                  App Router.
+                Tailwind is the simplest choice fitting V1 (RSC-compatible, shadcn/ui
+                pairing). DECIDED, not MANDATED.
 CONSEQUENCES:   tailwind.config.ts. No styled-components or emotion.
-ADR CANDIDATE:  NO (MANDATED)
-STATUS:         MANDATED
+ADR CANDIDATE:  NO (standard tool choice)
+STATUS:         DECIDED
 ```
 
 ### TD-011 — UI component library
@@ -461,37 +534,69 @@ ADR CANDIDATE:  NO (trivial)
 STATUS:         DECIDED
 ```
 
-### TD-013 — Rich text editor for offer description
+### TD-013 — Rich text editor for offer description (revised per OWNER §4)
 
 ```
-TD-013: Rich Text Editor for Offer Description
+TD-013: Rich Text Editor for Offer Description (revised rendering contract)
 DECISION AREA:  How ADMIN enters formatted description (paragraphs, lists, headings,
-                links per BR-034)
+                links per BR-034) AND how the public renders it safely
 REQUIREMENTS:   BR-034 (preserve formatting), OWNER S6 §5 (évalue Tiptap mais ne
-                l'impose pas si une solution plus simple satisfait S5)
-OPTIONS:        Tiptap (rich text, JSON or HTML output) | Markdown editor (react-markdown
-                + simple textarea) | Plain textarea with Markdown syntax help
-SELECTED:       Tiptap with JSON storage + server-rendered HTML output
-RATIONALE:      - Tiptap: headless, framework-agnostic, produces structured JSON (or
-                  HTML), supports paragraphs/lists/headings/links out of the box,
-                  sanitize-friendly. Mature, maintained, used widely. Provides a
-                  WYSIWYG experience that fits "professional formatting" without
-                  requiring ADMIN to learn Markdown syntax.
+                l'impose pas si une solution plus simple satisfait S5), OWNER revision
+                §4 (corrected rendering contract)
+OPTIONS:        Tiptap (rich text, JSON storage) | Markdown editor + textarea | Plain textarea
+SELECTED:       Tiptap with JSON storage (jsonb) + Tiptap React server-side renderer
+                for public rendering
+RATIONALE:      - Tiptap: headless, framework-agnostic, produces structured JSON,
+                  supports paragraphs/lists/headings/links out of the box. Mature,
+                  maintained, used widely. WYSIWYG experience fits "professional
+                  formatting" without requiring ADMIN to learn Markdown syntax.
                 - Markdown + textarea: simpler but requires ADMIN to know Markdown
-                  syntax. Goes against "simplicity of use" priority 1. Renders
-                  server-side via a Markdown parser (e.g., remark + rehype-sanitize).
+                  syntax. Goes against "simplicity of use" priority 1.
                 - Plain textarea: no formatting. Fails BR-034.
-                Tiptap is the right balance: WYSIWYG for ADMIN, structured JSON for
-                safe storage (no raw HTML in DB), server-side render to HTML via
-                Tiptap's HTML renderer + sanitize on output.
-                Storage choice: Tiptap JSON (ProseMirror doc) in the description column
-                of type jsonb. Server-side, render JSON → HTML via Tiptap's
-                generateHTML() + a small sanitizer pass. This avoids storing raw HTML
-                (sanitization-on-input is fragile; structured JSON is safer).
-CONSEQUENCES:   @tiptap/react + @tiptap/starter-kit + @tiptap/extension-link +
-                @tiptap/extension-text-align. Server-side Tiptap HTML renderer for
-                output. JSON stored in offers.description as jsonb. No raw HTML in DB.
-ADR CANDIDATE:  YES
+                Tiptap is the right balance for editing.
+
+                STORAGE: Tiptap JSON (ProseMirror document structure) in the
+                `description` column of type `jsonb`. No raw HTML in DB.
+
+                RENDERING (revised per OWNER §4): the public detail page renders the
+                description from the Tiptap JSON **directly to React elements** using
+                Tiptap's React renderer (`@tiptap/react` with `editor.JSONContent` →
+                React components), running server-side inside a Server Component.
+                This avoids the HTML-string roundtrip entirely:
+                - No `generateHTML(json)` producing an HTML string.
+                - No `dangerouslySetInnerHTML` with the resulting HTML string.
+                - The Tiptap React renderer produces safe React elements from the
+                  JSON: only known node types are rendered; unknown HTML or arbitrary
+                  strings are ignored (Tiptap's schema enforces this).
+                This is the safest rendering contract: structured JSON in DB → safe
+                React elements on the server → safe HTML sent to the client.
+
+                IF a HTML string is ever needed (e.g., for an RSS feed, a sitemap, or
+                an email — none of which exist in V1), the mechanism must be:
+                (a) `generateHTML(json)` produces an HTML string;
+                (b) sanitize the HTML string with a vetted sanitizer
+                    (e.g., `sanitize-html` with an explicit allowlist of tags and
+                    attributes: p, ul, ol, li, h1, h2, h3, a[href], strong, em, br);
+                (c) the sanitized HTML may then be rendered via
+                    `dangerouslySetInnerHTML` ONLY if step (b) is verified.
+                For V1's public rendering, this HTML-string path is NOT used; the
+                React renderer is the default and only rendering path.
+
+                The previous draft's contract was internally inconsistent (it stated
+                "generateHTML" AND "no dangerouslySetInnerHTML" without explaining how
+                the HTML would actually be rendered). This revision removes the
+                inconsistency: V1 uses the Tiptap React renderer server-side, no
+                HTML string is generated for public rendering.
+CONSEQUENCES:   - Editor (admin side): @tiptap/react + @tiptap/starter-kit +
+                @tiptap/extension-link + @tiptap/extension-text-align (client component).
+                - Storage: `description` column type `jsonb` in `offers` table.
+                - Rendering (public): @tiptap/react React renderer inside a Server
+                Component — produces safe React elements from JSON, no HTML string.
+                - No `dangerouslySetInnerHTML` for user content in V1.
+                - No `sanitize-html` dependency needed in V1 (the React renderer is
+                safe by construction). The sanitize-html path is documented above for
+                future use only if a HTML string becomes necessary (deferred).
+ADR CANDIDATE:  YES (revised)
 STATUS:         DECIDED
 ```
 
@@ -550,75 +655,154 @@ ADR CANDIDATE:  NO (standard)
 STATUS:         DECIDED
 ```
 
-### TD-016 — Public search strategy
+### TD-016 — Public search strategy (revised per OWNER §7, §8)
 
 ```
-TD-016: Public Search Strategy
-DECISION AREA:  How public text search (title, company, location) is implemented
+TD-016: Public Search Strategy (revised)
+DECISION AREA:  How public text search (title, company, location) is implemented AND
+                exposed (URL strategy)
 REQUIREMENTS:   FR-050 (SHOULD — simple text search on title, company, location),
-                OWNER S6 §9 (PostgreSQL ILIKE ou full-text si utile, pas d'Elasticsearch)
+                OWNER S6 §9 (PostgreSQL ILIKE ou full-text si utile, pas d'Elasticsearch),
+                OWNER revision §7 (décider en S6 : Server Component + searchParams,
+                pas d'API publique), OWNER revision §8 (pas de pg_trgm obligatoire en
+                V1 initiale, optimisation mesurée)
 OPTIONS:        PostgreSQL ILIKE | PostgreSQL full-text search (tsvector + tsquery) |
                 Elasticsearch (EXCLUDED per OWNER)
 SELECTED:       PostgreSQL ILIKE (case-insensitive LIKE) on title + company + location
-                with OR conditions
-RATIONALE:      - ILIKE: simplest, no extra index type needed (besides a trigram index
-                  if performance requires), works for "contains" semantics directly.
-                  For a small editorial portal (single-digit to low-thousands of
-                  offers), ILIKE performance is fine. Matches the SHOULD priority of
-                  FR-050.
+                with OR conditions; exposed via Server Component + URL searchParams
+                (no public API route handler)
+RATIONALE:      - ILIKE: simplest, no extra index type needed by default (a trigram
+                  index can be added later if performance requires — see below),
+                  works for "contains" semantics directly. For a small editorial
+                  portal (single-digit to low-thousands of offers), ILIKE performance
+                  is fine. Matches the SHOULD priority of FR-050.
                 - Full-text search (tsvector GIN index): more powerful (stemming,
                   ranking, multi-language), but adds complexity (tsvector column,
                   trigger to maintain, query syntax). Overkill for V1.
                 - Elasticsearch: excluded per OWNER S6 §9 (no distributed search
                   engine for V1).
-                ILIKE with a pg_trgm index (if perf needs it) is the right V1 choice.
-                Migration to full-text search is straightforward later if needed.
+
+                EXPOSURE (revised per OWNER §7): the public search is implemented as
+                a Server Component reading the `?q=` URL search parameter, querying
+                the DB via Drizzle, and rendering the filtered list server-side. NO
+                public API route handler is created solely for the search. The URL
+                `/offres?q=...` is the public search interface; it is server-rendered
+                and indexable. This avoids creating a "public API" that V1 explicitly
+                excludes (INT-001, OOS-015).
+
+                pg_trgm (OWNER revision §8): the pg_trgm GIN index is an OPTIONAL
+                PERFORMANCE OPTIMIZATION, NOT a V1 initial requirement. V1 ships
+                WITHOUT pg_trgm. If production profiling later shows ILIKE queries
+                exceeding the response-time expectation (when the offer count grows
+                well beyond editorial portal scale), the operator adds the pg_trgm
+                extension and a GIN index via a new forward migration (per TD-018
+                doctrine). This is a measured optimization, not an initial dependency.
 CONSEQUENCES:   Query: WHERE title ILIKE '%' || $1 || '%' OR company ILIKE '%' || $1
-                || '%' OR location ILIKE '%' || $1 || '%'. Add pg_trgm extension +
-                GIN index on (title, company, location) if perf profiling requires
-                (deferred to S10/S11 if observed need).
+                || '%' OR location ILIKE '%' || $1 || '%'. URL: /offres?q=term.
+                No pg_trgm extension in V1 initial migrations. No public API route
+                handler for search. The search is a Server Component reading searchParams.
+                pg_trgm addition deferred to a future migration only if profiling
+                proves the need.
 ADR CANDIDATE:  NO (implementation detail)
 STATUS:         DECIDED
 ```
 
-### TD-017 — Package manager
+### TD-017 — Package manager (reclassified per OWNER revision §1)
 
 ```
 TD-017: Package Manager
 DECISION AREA:  JS package manager and lockfile
-REQUIREMENTS:   OWNER S6 §28 (pnpm recommandé)
+REQUIREMENTS:   OWNER S6 §28 ("pnpm recommandé" — a recommendation, not a mandate)
+OPTIONS:        pnpm | npm | yarn | bun
 SELECTED:       pnpm
-RATIONALE:      OWNER preference. pnpm is faster, disk-efficient (content-addressed
-                store), strict about phantom dependencies, has a deterministic
-                lockfile (pnpm-lock.yaml). Works natively with Vercel builds.
+RATIONALE:      OWNER recommended pnpm (not mandated). Among credible candidates:
+                - pnpm: faster, disk-efficient (content-addressed store), strict about
+                  phantom dependencies, deterministic lockfile (pnpm-lock.yaml). Native
+                  Vercel support.
+                - npm: default, no install needed, but slower and less disk-efficient.
+                - yarn: similar to pnpm but smaller ecosystem share in 2025.
+                - bun: fastest but newer, smaller ecosystem, lockfile format still
+                  evolving.
+                pnpm is the best fit for V1. DECIDED, not MANDATED.
 CONSEQUENCES:   pnpm-lock.yaml committed. Vercel build setting: package manager = pnpm.
-ADR CANDIDATE:  NO (MANDATED)
-STATUS:         MANDATED
+ADR CANDIDATE:  NO (standard tool choice)
+STATUS:         DECIDED
 ```
 
-### TD-018 — Database migration strategy
+### TD-018 — Database migration strategy (revised per OWNER §11)
 
 ```
-TD-018: Database Migration Strategy
+TD-018: Database Migration Strategy (revised doctrine)
 DECISION AREA:  Schema migration tooling and process
 REQUIREMENTS:   OWNER S6 §14 (migrations versionnées, reproductibles, aucune
-                modification manuelle non tracée, distinction schema/seed), TD-004
-                (Drizzle)
-SELECTED:       Drizzle Kit (drizzle-kit) for schema migrations; separate seed
+                modification manuelle non tracée, distinction schema/seed), OWNER
+                revision §11 (forward corrective migrations preferred over automatic
+                down migrations), TD-004 (Drizzle)
+SELECTED:       Drizzle Kit (drizzle-kit) for schema migrations; separate seed/bootstrap
                 scripts (not migrations) for initial data
 RATIONALE:      Drizzle Kit is the official Drizzle migration tool. Schema-as-code in
-                db/schema.ts. drizzle-kit generate creates versioned SQL migration
-                files in db/migrations/. drizzle-kit migrate applies them. Idempotent
+                db/schema.ts. drizzle-kit generate creates versioned SQL migration files
+                in db/migrations/. drizzle-kit migrate applies them. Idempotent
                 where possible (Drizzle tracks applied migrations in a __drizzle_migrations
-                table). Seed scripts are separate (drizzle-kit seed or a custom script)
-                and do NOT modify schema.
-                Preview environments: each Neon preview branch has its own migration
-                state (auto-synced from the branch's DB). Production migrations are
-                applied manually after OWNER GO (per AISE S13).
-CONSEQUENCES:   db/migrations/ folder with versioned .sql files. migrations meta in
-                Drizzle's table. Seed scripts in db/seed/ (separate from migrations).
-                Production migration execution: explicit, never automatic (S0 §25
-                requires verified target before any write).
+                table). Seed scripts are separate (db/seed/ and db/bootstrap/) and do
+                NOT modify schema.
+
+                MIGRATION DOCTRINE (per OWNER revision §11):
+                1. Schema source controlled by Git (db/schema.ts is the source of truth).
+                2. Migrations are generated via `drizzle-kit generate` and code-reviewed
+                   before merge (no auto-generated migration merged blindly).
+                3. Migrations are applied in a controlled manner:
+                   - Local dev: developer runs `pnpm db:migrate` manually.
+                   - Preview: applied automatically on Vercel Preview build OR manually
+                     by operator against the preview Neon branch (S10 decision).
+                   - Production: applied MANUALLY by operator before Vercel production
+                     promotion, OR via a Vercel pre-deploy build hook (configurable).
+                     NEVER automatically without verification.
+                4. NEVER run `drizzle-kit push` against Production as a normal
+                   mechanism — `push` skips the migration files and writes schema
+                   directly, bypassing the versioned record. `push` is allowed only
+                   for local dev experimentation, NEVER for Preview or Production.
+                5. NO silent manual modification of the Production schema — every
+                   schema change goes through a versioned migration file.
+
+                ROLLBACK DOCTRINE (per OWNER revision §11):
+                - V1 prefers FORWARD CORRECTIVE migrations over relying on automatic
+                  down migrations.
+                - If a migration causes a production issue, the response is:
+                  (a) Roll back the Vercel deployment to the previous build
+                      (instant, via Vercel dashboard).
+                  (b) Write a NEW forward corrective migration that fixes the issue
+                      (e.g., re-add a dropped column, fix a constraint).
+                  (c) Apply the corrective migration via the normal controlled path.
+                - Drizzle can generate down migrations for safety debugging, but V1
+                  does NOT rely on running down migrations in production as a normal
+                  rollback mechanism — down migrations can lose data (e.g., dropping
+                  a column added by the up migration loses the data written to it).
+                - The ultimate data rollback is Neon PITR (point-in-time recovery,
+                  Section 8.7) for cases where forward correction is insufficient.
+                - Exception: if a migration is purely additive (add column, add table,
+                  add index) and the up migration is reversible without data loss, a
+                  down migration may be retained for that specific case. This is the
+                  only case where down migrations are part of the normal rollback
+                  plan in V1.
+
+                SEED vs BOOTSTRAP distinction (per OWNER revision §12):
+                - SEED (demo data): optional scripts that populate the DB with sample
+                  offers for development/demonstration. NEVER run against Production.
+                  Lives in db/seed/demo.ts. Not part of migrations. Optional, run
+                  manually in dev only.
+                - BOOTSTRAP (system principals): the idempotent script that creates
+                  Fantomas and the initial ADMIN. Lives in db/bootstrap/. Run ONCE
+                  per environment after the first deploy, then can be re-run safely
+                  (idempotent — does not overwrite existing users). This is NOT a
+                  seed; it is a controlled bootstrap. See TD-020.
+CONSEQUENCES:   db/migrations/ folder with versioned .sql files (generated by
+                drizzle-kit). Drizzle meta table tracks applied migrations. db/seed/
+                for demo data (dev only, never production). db/bootstrap/ for Fantomas
+                + initial ADMIN (controlled, idempotent, per-environment).
+                Production migration execution: explicit, never automatic, never
+                via `drizzle-kit push`. Forward corrective migrations preferred over
+                down migrations in production.
 ADR CANDIDATE:  YES
 STATUS:         DECIDED
 ```
@@ -654,47 +838,68 @@ ADR CANDIDATE:  YES (security-critical)
 STATUS:         DECIDED
 ```
 
-### TD-020 — Bootstrap of initial ADMIN and Fantomas
+### TD-020 — Bootstrap of initial ADMIN and Fantomas (revised per OWNER §12)
 
 ```
-TD-020: Bootstrap of Initial ADMIN and Fantomas
+TD-020: Bootstrap of Initial ADMIN and Fantomas (revised)
 DECISION AREA:  How the first ADMIN and Fantomas are created without a public
                 registration flow
 REQUIREMENTS:   FR-004 (no public registration), NFR-013 (Fantomas credential handling),
                 PERM-004 (Fantomas capabilities), AISE S0 §14/§21, S0 §13/§25,
-                OWNER S6 §15 (idempotent, controlled, reproductible)
-SELECTED:       Idempotent seed script (pnpm db:seed) that:
+                OWNER S6 §15 (idempotent, controlled, reproductible), OWNER revision §12
+                (distinction: SEED démo ≠ BOOTSTRAP des principaux système)
+SELECTED:       Idempotent bootstrap script (db/bootstrap/bootstrap.ts, NOT db/seed/)
+                that:
                 1. Creates the Fantomas user if it does not exist, with the
-                   FANTOMAS_INITIAL_PASSWORD env var (hashed via bcrypt at seed time).
-                   Login = "Fantomas". Role = "fantomas". The script is idempotent —
-                   if Fantomas already exists, it is not recreated, but a warning is
-                   logged. The password is NOT overwritten on subsequent runs (so
-                   rotations are preserved).
-                2. Optionally creates the initial ADMIN user(s) listed in a
-                   config-driven seed file (e.g., db/seed/admins.ts with login + bcrypt
-                   hash, NEVER plaintext). This is for V1 bootstrap only; future ADMIN
-                   management UI is deferred (DR-050).
-                3. The seed script is run manually after migration (NOT automatic).
-                   It is the deployment operator's responsibility (or OWNER's) to
-                   run `pnpm db:seed` once per environment after the first deployment.
+                   FANTOMAS_INITIAL_PASSWORD env var. The script uses Better Auth's
+                   `auth.api.createUser()` server-side, which handles password hashing
+                   (scrypt by default per TD-009) — the script does NOT hash passwords
+                   itself.
+                   Login (username) = "Fantomas". Role = "fantomas".
+                   The script is idempotent — if Fantomas already exists, it is NOT
+                   recreated, and a warning is logged. The password is NOT overwritten
+                   on subsequent runs (so rotations done via the V2 admin UI or by
+                   Fantomas directly are preserved).
+                2. Optionally creates the initial ADMIN user(s) listed in a config-driven
+                   bootstrap config (e.g., db/bootstrap/config.ts with login + env-var
+                   name for the password — NEVER plaintext in the config). This is for
+                   V1 bootstrap only; future ADMIN management UI is deferred (DR-050).
+                3. The bootstrap script is run manually after migration (NOT automatic).
+                   It is the deployment operator's responsibility (or OWNER's) to run
+                   `pnpm db:bootstrap` once per environment after the first deployment.
+
                 FANTOMAS_INITIAL_PASSWORD is provided via Vercel env var (Production
                 and Preview separately). Per S0 §25, this secret is requested at the
                 exact boundary where it is needed (deployment time, not S6/S7 time).
-                The seed script hashes it via bcrypt before storing — only the hash
-                is persisted in the DB.
+                The bootstrap script passes the password to Better Auth's createUser,
+                which hashes it — only the hash is persisted in the DB. The plaintext
+                password NEVER enters the database, the repository, or the logs.
+
+                SEED vs BOOTSTRAP distinction (per OWNER revision §12):
+                - The bootstrap script (db/bootstrap/) is for system principals ONLY
+                  (Fantomas + initial ADMIN). It is NOT a demo seed.
+                - A separate optional demo seed (db/seed/demo.ts) may exist for
+                  development and demonstration purposes (sample offers). It is NEVER
+                  run against Production. It is run manually in dev only.
+                - The two are kept separate to ensure the bootstrap of system
+                  principals does NOT depend on demo data being loaded.
 RATIONALE:      - Avoids public registration (FR-004).
                 - Idempotent: safe to re-run.
-                - Fantomas is bootstrapped via env var + seed, satisfying AISE §14
-                  (Fantomas as bootstrap principal).
+                - Fantomas is bootstrapped via env var + bootstrap script, satisfying
+                  AISE §14 (Fantomas as bootstrap principal).
                 - The initial ADMIN can be created by Fantomas post-bootstrap via
                   an ADMIN management UI — but V1 defers that UI (DR-050). For V1
-                  launch, the initial ADMIN is created via the seed script too.
+                  launch, the initial ADMIN is created via the bootstrap script too.
                 - The plaintext password NEVER enters the repository, the database,
-                  or the logs. Only the bcrypt hash is stored.
-CONSEQUENCES:   db/seed/bootstrap.ts script. Env vars: FANTOMAS_INITIAL_PASSWORD
-                (Production + Preview separately). After first production deploy:
-                OWNER (or operator) runs `pnpm db:seed` once. The script logs what
-                was created and warns if Fantomas already exists (no overwrite).
+                  or the logs. Only the scrypt hash is stored (via Better Auth).
+                - Separating bootstrap (system) from seed (demo) prevents accidental
+                  contamination of Production with demo data, and ensures bootstrap
+                  is not coupled to demo data being present.
+CONSEQUENCES:   db/bootstrap/bootstrap.ts script. db/bootstrap/config.ts for initial
+                ADMIN config. Env vars: FANTOMAS_INITIAL_PASSWORD (Production + Preview
+                separately). After first production deploy: OWNER (or operator) runs
+                `pnpm db:bootstrap` once. The script logs what was created and warns
+                if Fantomas already exists (no overwrite).
 ADR CANDIDATE:  YES (security-critical + AISE-mandated)
 STATUS:         DECIDED
 ```
@@ -800,7 +1005,7 @@ SELECTED:       Layer 1 — Unit/logic: Vitest (pure functions, validation, busi
                 - DB: NEVER mocked in integration tests. Use a real Neon preview branch
                   or a local PostgreSQL container.
                 - Auth: mocked at the session level for non-auth-focused tests; real
-                  Auth.js flow tested in integration.
+                  Better Auth flow tested in integration.
                 - External APIs: N/A in V1 (no external integration).
                 Critical E2E scenario (OWNER S6 §21):
                 1. ADMIN login
@@ -898,11 +1103,11 @@ SELECTED:       Next.js Server Actions built-in CSRF protection (origin check) +
                 SameSite=Lax session cookies
 RATIONALE:      Next.js App Router Server Actions have built-in origin verification
                 since v14 (the framework compares the Origin header to the allowed
-                origins). Combined with SameSite=Lax on the Auth.js session cookie,
+                origins). Combined with SameSite=Lax on the Better Auth session cookie,
                 this provides adequate CSRF protection for V1 without custom token
                 management.
-CONSEQUENCES:   No custom CSRF token. Auth.js session cookie config: sameSite: 'lax',
-                secure: true in production, httpOnly: true.
+CONSEQUENCES:   No custom CSRF token. Better Auth session cookie config: sameSite: 'lax',
+                secure: true in production, httpOnly: true (per TD-003 revised).
 ADR CANDIDATE:  YES (security-relevant)
 STATUS:         DECIDED
 ```
@@ -926,6 +1131,103 @@ CONSEQUENCES:   app/sitemap.ts generates sitemap.xml from DB query (PUBLISHED of
                 only). app/robots.ts is static. Each page exports a generateMetadata
                 function.
 ADR CANDIDATE:  NO (standard)
+STATUS:         DECIDED
+```
+
+### TD-030 — Neon PostgreSQL driver (added per OWNER §5)
+
+```
+TD-030: Neon PostgreSQL Driver (added per OWNER revision §5)
+DECISION AREA:  Which Neon driver to use for Drizzle ORM access
+REQUIREMENTS:   TD-002 (PostgreSQL on Neon), TD-004 (Drizzle), OWNER revision §5 (driver
+                choice must match V1's actual transaction needs; do NOT default to
+                Neon HTTP if interactive transactions are required)
+OPTIONS:        @neondatabase/serverless (HTTP/WebSockets, serverless-optimized) |
+                postgres-js (TCP, full interactive transactions) |
+                pg (TCP, full interactive transactions, classic Node.js driver)
+SELECTED:       @neondatabase/serverless (Neon serverless driver)
+RATIONALE:      V1's transaction needs (per OWNER revision §6 — identify operations
+                requiring a transaction):
+                1. Bootstrap of Fantomas + initial ADMIN — single INSERT per user,
+                   no multi-statement transaction needed (each user creation is
+                   independent; if the script creates 2 users and the second fails,
+                   the first can remain — idempotent re-run handles it).
+                2. Better Auth session creation — handled by Better Auth internally,
+                   single INSERT into the sessions table.
+                3. Offer mutations (create, edit, publish, suspend, archive) — each
+                   is a single UPDATE or INSERT on the offers table, optionally with
+                   a revalidatePath call (not a DB operation). No multi-statement
+                   transaction needed.
+                4. Public reads — single SELECT per request.
+
+                V1 has NO multi-statement interactive transactions, NO long-running
+                transactions, NO transactions requiring a persistent TCP connection
+                across multiple round trips. All V1 transactions are short, single-
+                statement operations.
+
+                Therefore:
+                - @neondatabase/serverless: designed for serverless (Vercel), uses
+                  HTTP/WebSockets, supports transactions via the `transaction()`
+                  helper (which sends multiple statements in a single HTTP request
+                  to Neon's HTTP endpoint — sufficient for V1's short transactions).
+                  No TCP connection pool to manage. Best fit for Vercel serverless
+                  functions. No cold-start penalty for TCP.
+                - postgres-js or pg (TCP): would require a persistent connection or
+                  a pool, which is fragile on Vercel serverless (connection reuse
+                  issues, cold-start cost). Overkill for V1.
+
+                @neondatabase/serverless is the simplest driver compatible with
+                V1's actual operations. If a future version requires long interactive
+                transactions (e.g., a multi-step data import), the driver can be
+                switched to postgres-js for that specific code path.
+CONSEQUENCES:   Drizzle is instantiated with the Neon serverless driver:
+                `drizzle(new Pool({ connectionString: process.env.DATABASE_URL }))`
+                where `Pool` comes from `@neondatabase/serverless`. No `pg` or
+                `postgres-js` dependency. Short transactions use `db.transaction()`
+                which the Neon serverless driver supports.
+ADR CANDIDATE:  NO (implementation detail)
+STATUS:         DECIDED
+```
+
+### TD-031 — Login rate limiting architecture (added per OWNER §7)
+
+```
+TD-031: Login Rate Limiting Architecture (added per OWNER revision §7)
+DECISION AREA:  Architectural mechanism for protecting the login endpoint against
+                brute-force attacks
+REQUIREMENTS:   NFR-012 (session protection), OWNER revision §7 (define the behavior
+                architecturally in S6; implementation details can belong to S10)
+SELECTED:       In-memory rate limiter (per-IP counter with sliding window) in the
+                login Server Action, with a configurable threshold (default: max 5
+                failed attempts per IP per 15-minute window). After the threshold,
+                the login action returns a generic "too many attempts" error
+                (FR-001-ERR style — no information leak).
+RATIONALE:      - In-memory (per-instance): simplest; no DB write on every attempt;
+                  no external service (no Vercel KV, no Upstash — both are paid
+                  add-ons). Acceptable for V1's threat model (small admin team, no
+                  public registration, no automated password spraying expected).
+                  Caveat: in-memory state is per-serverless-instance — on Vercel,
+                  each function instance has its own counter. An attacker hitting
+                  different instances could bypass. For V1, this is acceptable
+                  (Vercel's edge already provides DDoS protection; the rate limiter
+                  is a defense-in-depth layer, not the only one).
+                - DB-backed rate limiter: more robust (persists across instances),
+                  but adds a DB write per login attempt (cost + latency). Overkill
+                  for V1.
+                - Vercel KV / Upstash Redis: paid add-ons, excluded by OWNER anti-
+                  overengineering for V1.
+
+                The rate limiter is a small module (lib/server/auth/rate-limit.ts)
+                invoked at the start of the login Server Action. The threshold is
+                configurable via an env var (LOGIN_RATE_LIMIT_MAX, default 5) and
+                window (LOGIN_RATE_LIMIT_WINDOW_MIN, default 15).
+
+                This is an ARCHITECTURAL decision (S6). The exact implementation
+                (sliding window counter, token bucket, etc.) is an S10 detail.
+CONSEQUENCES:   lib/server/auth/rate-limit.ts module. Called by the login Server
+                Action. No DB dependency. No external service. Configurable via env
+                vars. Implementation in S10.
+ADR CANDIDATE:  NO (security detail, coupled to TD-003)
 STATUS:         DECIDED
 ```
 
@@ -963,8 +1265,11 @@ components/                   # React components
 
 lib/                          # Cross-cutting libraries
   server/                     # Server-only code (never imported by client components)
-    auth.ts                   # Auth.js config + helpers (getSession, requireAdmin)
-    db.ts                     # Drizzle client (read DATABASE_URL)
+    auth/                     # Better Auth config + authorization layer
+      auth.ts                 # Better Auth config (Drizzle adapter, sign-up disabled)
+      authorization.ts        # can(), requireCapability(), getPrincipal() (library-independent)
+      rate-limit.ts           # Login rate limiter (TD-031)
+    db.ts                     # Drizzle client (Neon serverless driver, read DATABASE_URL)
     validation/               # Zod schemas (offer schema, login schema, etc.)
     services/                 # Business logic services
       offers.ts               # Offer CRUD + lifecycle transitions
@@ -996,14 +1301,14 @@ messages/                     # French strings (V1: simple object, not i18n fram
 |---|---|---|---|
 | `app/(public)` | Public routes, server-rendered | lib/server/services, components/public | DB schema, business rules |
 | `app/admin` | Admin routes, auth guard | lib/server/auth, lib/server/services, components/admin | DB schema, direct DB queries |
-| `lib/server/auth` | Auth.js config, session, role checks | db/schema (users table) | Business logic |
+| `lib/server/auth` | Better Auth config + authorization layer (can/requireCapability independent of auth library) | db/schema (user, session, account, verification via Better Auth adapter) | Business logic |
 | `lib/server/db` | Drizzle client, connection | DATABASE_URL env var | Business logic |
 | `lib/server/validation` | Zod schemas | (none) | DB access |
 | `lib/server/services/offers` | Offer CRUD, lifecycle transitions, public queries, search | lib/server/db, lib/server/validation, db/schema | Auth, UI |
 | `lib/server/services/users` | User queries (login, role) | lib/server/db, db/schema | Offer logic |
 | `db/schema` | Drizzle schema definitions | drizzle-orm | Migrations |
 | `db/migrations` | SQL migration files | (generated by drizzle-kit) | Schema definitions |
-| `db/seed/bootstrap` | Idempotent seed of Fantomas + initial ADMIN | db/schema, lib/server (bcrypt), env var | Routes, UI |
+| `db/bootstrap` | Idempotent bootstrap of Fantomas + initial ADMIN (separate from demo seed) | db/schema, lib/server/auth (Better Auth createUser), env var | Routes, UI |
 | `components/ui` | shadcn/ui copies | tailwind, lucide-react | Business logic |
 | `components/public` | OfferCard, OfferDetail | components/ui, lib/server/services (read-only) | Mutations |
 | `components/admin` | OfferForm, OfferList, action buttons, StatusBadge | components/ui, lib/server/validation, React Hook Form | DB direct access |
@@ -1026,37 +1331,44 @@ Client components (`components/*`) may only import from `components/ui`, `lib/cl
 
 ### 7.1 Stack summary
 
-| Layer | Choice | Decision ID |
-|---|---|---|
-| Runtime | Node.js (Vercel serverless) | MANDATED (Vercel) |
-| Language | TypeScript (strict) | MANDATED |
-| Framework | Next.js (App Router) | MANDATED |
-| Database | PostgreSQL on Neon | MANDATED |
-| ORM / Query | Drizzle ORM + Drizzle Kit | TD-004 |
-| Validation | Zod | TD-008 |
-| Auth | Auth.js (NextAuth v5) + Credentials provider | TD-003 |
-| Password hashing | bcrypt (cost 12) | TD-009 |
-| Forms | React Hook Form + zodResolver | TD-007 |
-| Data fetching | Server Components (read) + Server Actions (mutate) | TD-006 |
-| Styling | Tailwind CSS | TD-010 |
-| UI components | shadcn/ui (copy-paste, Radix-based) | TD-011 |
-| Icons | Lucide React | TD-012 |
-| Rich text | Tiptap (JSON storage, server-side HTML render) | TD-013 |
-| Search | PostgreSQL ILIKE + optional pg_trgm | TD-016 |
-| IDs | UUID v4 (PostgreSQL native) | TD-015 |
-| Migrations | Drizzle Kit | TD-018 |
-| Testing | Vitest + React Testing Library + Playwright | TD-024 |
-| Lint/format | ESLint + Prettier + tsc strict | TD-027 |
-| Package manager | pnpm | TD-017 |
-| CI | GitHub Actions | TD-025 |
-| Hosting | Vercel (Production + Preview) | TD-019 |
-| Observability | Structured logs + Vercel logs (no Sentry in V1) | TD-026 |
+| Layer | Choice | Decision ID | Status |
+|---|---|---|---|
+| Runtime | Node.js (Vercel serverless) | MANDATED (Vercel) | MANDATED |
+| Language | TypeScript (strict) | Charter §10 | MANDATED |
+| Framework | Next.js (App Router) | Charter §10 | MANDATED |
+| Database | PostgreSQL on Neon | Charter §10 | MANDATED |
+| Neon driver | @neondatabase/serverless | TD-030 | DECIDED |
+| ORM / Query | Drizzle ORM + Drizzle Kit | TD-004 | DECIDED |
+| Validation | Zod | TD-008 | DECIDED |
+| Auth | Better Auth (Drizzle adapter, username/password, database sessions, sign-up disabled) | TD-003 (revised) | DECIDED |
+| Password hashing | Better Auth default (scrypt, Node.js built-in) | TD-009 (revised) | DECIDED |
+| Rate limiting | In-memory per-IP counter (login endpoint) | TD-031 | DECIDED |
+| Authorization abstraction | can() / requireCapability() (independent of auth library) | TD-003 + Section 13 | DECIDED |
+| Forms | React Hook Form + zodResolver | TD-007 | DECIDED |
+| Data fetching | Server Components (read) + Server Actions (mutate) | TD-006 | DECIDED |
+| Styling | Tailwind CSS | TD-010 | DECIDED |
+| UI components | shadcn/ui (copy-paste, Radix-based) | TD-011 | DECIDED |
+| Icons | Lucide React | TD-012 | DECIDED |
+| Rich text | Tiptap (JSON storage in jsonb, React server-side render) | TD-013 (revised) | DECIDED |
+| Search | PostgreSQL ILIKE, Server Component + searchParams (no public API) | TD-016 (revised) | DECIDED |
+| IDs | UUID v4 (PostgreSQL native) | TD-015 | DECIDED |
+| Migrations | Drizzle Kit (forward corrective preferred; no push against Production) | TD-018 (revised) | DECIDED |
+| Bootstrap | Idempotent script via Better Auth createUser + env vars (separate from seed) | TD-020 (revised) | DECIDED |
+| Testing | Vitest + React Testing Library + Playwright | TD-024 | DECIDED |
+| Lint/format | ESLint + Prettier + tsc strict | TD-027 | DECIDED |
+| Package manager | pnpm | TD-017 | DECIDED |
+| CI | GitHub Actions | TD-025 | DECIDED |
+| Hosting | Vercel (Production + Preview) | TD-019 | DECIDED |
+| Observability | Structured logs + Vercel logs (no Sentry in V1) | TD-026 | DECIDED |
+| SEO | Next.js metadata + sitemap.ts + robots.ts | TD-029 | DECIDED |
 
 ### 7.2 NOT used (with rationale)
 
 | Tech | Why not |
 |---|---|
 | Prisma | TD-004 — Drizzle simpler, SQL-first, no query engine binary |
+| Auth.js v5 | TD-003 (revised) — Better Auth better aligned with Drizzle-first + Next.js App Router; Credentials provider is discouraged in Auth.js docs for database-backed auth |
+| bcrypt / bcryptjs | TD-009 (revised) — Better Auth handles password hashing internally (scrypt by default); no separate password-hashing dependency needed |
 | TanStack Query | TD-006 — Server Components + Server Actions cover V1 needs |
 | TanStack Table | Not needed — admin list is simple (filter + pagination); a raw HTML table with sorting on URL params suffices for V1. Can be added in V2 if column sorting/pinning becomes valuable. |
 | GraphQL | Excluded per OWNER S6 anti-overengineering |
@@ -1065,11 +1377,14 @@ Client components (`components/*`) may only import from `components/ui`, `lib/cl
 | Elasticsearch | Excluded per OWNER S6 §9 |
 | Microservices / K8s | Excluded per OWNER S6 anti-overengineering |
 | Sentry | Deferred (TD-026) — V1 uses Vercel logs |
-| Custom auth | TD-003 — Auth.js covers all needs without fragile custom code |
+| Custom auth | TD-003 — Better Auth covers all needs without fragile custom code |
 | Material UI / Chakra | TD-011 — shadcn/ui is simpler and aligned with Tailwind |
 | i18n framework | NFR-040 — V1 is French only; a simple messages object suffices |
 | Stripe / payment lib | Excluded per Charter §8 |
 | Email service (Resend, etc.) | Excluded — V1 has no notifications (OOS-013) |
+| pg_trgm extension (in V1 initial) | TD-016 (revised) — optional performance optimization; deferred to a future migration only if profiling proves the need |
+| Vercel KV / Upstash Redis | TD-031 — paid add-ons; in-memory rate limiter sufficient for V1 |
+| `pg` / `postgres-js` (TCP drivers) | TD-030 — V1 has no long interactive transactions; @neondatabase/serverless is sufficient and serverless-optimized |
 
 ---
 
@@ -1103,7 +1418,7 @@ Client components (`components/*`) may only import from `components/ui`, `lib/cl
 
 - **Archived offers**: retained indefinitely (FR-034). No automatic deletion.
 - **Physical deletion**: OUT OF SCOPE V1 (OOS-019).
-- **Sessions**: Auth.js database session strategy — sessions have an expiry. Expired sessions are pruned by Auth.js on access (no scheduled job — S0 §23). For V1 scale (single-digit admins), this is sufficient.
+- **Sessions**: Better Auth database session strategy — sessions have an expiry. Expired sessions are pruned by Better Auth on access (no scheduled job — S0 §23). For V1 scale (single-digit admins), this is sufficient.
 - **Users (ADMIN, Fantomas)**: never deleted in V1. Fantomas cannot be deleted (Charter §7).
 
 ### 8.6 Concurrency and conflict handling
@@ -1137,11 +1452,12 @@ Drizzle equivalent: `pgEnum('offer_status', ['DRAFT', 'PUBLISHED', 'SUSPENDED', 
 
 ```sql
 -- For UUID generation (PostgreSQL >= 13 has gen_random_uuid() built-in; no extension needed)
--- For pg_trgm (optional, only if perf requires — see TD-016):
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+-- pg_trgm: NOT installed in V1 initial. Per TD-016 (revised), pg_trgm is an optional
+-- performance optimization, added only if production profiling proves ILIKE needs it.
+-- Default V1: no extension beyond built-in.
 ```
 
-`pg_trgm` is optional in V1. Added only if integration tests or production profiling show ILIKE performance issues. Default V1: not added (YAGNI for editorial scale).
+No extensions are installed in V1 initial. pg_trgm may be added via a future forward migration only if profiling proves the need (per TD-016 revised and TD-018 forward-migration doctrine).
 
 ### 9.3 Tables
 
@@ -1186,45 +1502,77 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 **Uniques:**
 - `PRIMARY KEY (id)` is the only unique constraint. No business uniqueness on (title, company, dates) — duplicates allowed (Charter §7).
 
-#### 9.3.2 `users` table
+#### 9.3.2 Auth tables — managed by Better Auth Drizzle adapter (per OWNER §13)
 
-| Column | Type | Nullable | Default | Notes |
-|---|---|---|---|---|
-| id | uuid | NOT NULL | gen_random_uuid() | Primary key |
-| login | text | NOT NULL | — | Unique login identifier (FR-001) |
-| password_hash | text | NOT NULL | — | bcrypt hash (TD-009); NEVER plaintext (NFR-010) |
-| role | user_role | NOT NULL | 'admin' | Enum: 'admin' | 'fantomas' |
-| created_at | timestamptz | NOT NULL | now() | |
-| updated_at | timestamptz | NOT NULL | now() | |
+Per OWNER revision §13: Better Auth is RETAINED (TD-003 revised) and manages its own auth schema via its Drizzle adapter. S6 does NOT redefine Better Auth's internal tables; S6 documents the EXPECTED functional shape and the V1 extension (the `role` column on `user`).
+
+Better Auth's Drizzle adapter generates the following tables (the exact column types and names follow Better Auth's conventions; S6 does not modify them):
+
+**`user` table** (Better Auth standard + V1 extension):
+
+| Column | Type | Source | Notes |
+|---|---|---|---|
+| id | text (Better Auth default) | Better Auth | Primary key |
+| email | text | Better Auth | Optional in V1 (Fantomas logs in by username; ADMIN logs in by username) |
+| emailVerified | boolean | Better Auth | Default false |
+| name | text | Better Auth | Optional display name |
+| username | text | Better Auth (username plugin) | **V1 login identifier** — unique. ADMIN and Fantomas log in by username. |
+| image | text | Better Auth | Optional; NULL in V1 (no avatars) |
+| createdAt | timestamptz | Better Auth | |
+| updatedAt | timestamptz | Better Auth | |
+| **role** | user_role (enum: 'admin' \| 'fantomas') | **V1 extension** | Added via Better Auth's `user.model` additional fields config. Default 'admin'. Fantomas gets 'fantomas'. |
+
+The `role` column is the ONLY V1 extension to Better Auth's standard user table. It is added via Better Auth's configuration (not via a custom column bypass), so Better Auth is aware of it and can include it in session data.
+
+**`session` table** (Better Auth standard):
+
+| Column | Type | Source | Notes |
+|---|---|---|---|
+| id | text | Better Auth | Primary key |
+| expiresAt | timestamptz | Better Auth | Session expiry |
+| token | text | Better Auth | Unique session token (set in httpOnly cookie) |
+| userId | text | Better Auth | Foreign key to user(id) ON DELETE CASCADE |
+| createdAt | timestamptz | Better Auth | |
+| updatedAt | timestamptz | Better Auth | |
+
+**`account` table** (Better Auth standard — used for OAuth providers, empty in V1 but schema present):
+
+| Column | Type | Source | Notes |
+|---|---|---|---|
+| id | text | Better Auth | Primary key |
+| userId | text | Better Auth | Foreign key to user(id) |
+| providerId | text | Better Auth | "credential" for username/password |
+| accountId | text | Better Auth | |
+| ... | ... | Better Auth | (other Better Auth standard columns) |
+
+**`verification` table** (Better Auth standard — used for email verification tokens, empty in V1 but schema present):
+
+| Column | Type | Source | Notes |
+|---|---|---|---|
+| id | text | Better Auth | Primary key |
+| identifier | text | Better Auth | |
+| value | text | Better Auth | Hashed token |
+| expiresAt | timestamptz | Better Auth | |
+| ... | ... | Better Auth | (other Better Auth standard columns) |
+
+**V1 does NOT redefine these tables.** Better Auth's Drizzle adapter generates them via `drizzle-kit generate` based on the Better Auth config. The migration files are versioned (TD-018). The only V1 customization is the `role` column on `user`, added via Better Auth's config so the adapter includes it in the schema generation.
 
 ```sql
 CREATE TYPE user_role AS ENUM ('admin', 'fantomas');
+-- The user_role enum is the only V1-specific schema addition to the Better Auth
+-- standard schema. It is added by the Drizzle schema definition referenced by the
+-- Better Auth config; Better Auth's adapter then generates the user table with
+-- the role column.
 ```
 
 **Constraints:**
-- `PRIMARY KEY (id)`
-- `UNIQUE (login)` — login is unique (Section 8.2 of S5)
-- `CHECK (role IN ('admin', 'fantomas'))` — enforced by enum
+- `UNIQUE (user.username)` — username is unique (V1 login identifier per FR-001).
+- `CHECK (role IN ('admin', 'fantomas'))` — enforced by the enum.
+- Better Auth's standard constraints on session, account, verification (foreign keys, uniqueness) are applied by the adapter.
 
 **Indexes:**
-- `UNIQUE INDEX idx_users_login ON users(login)` — for login lookup (FR-001).
-
-#### 9.3.3 `sessions` table (Auth.js database session strategy)
-
-Auth.js v5 with the database adapter creates this table. The exact schema is defined by the Auth.js Drizzle adapter. Key columns:
-
-| Column | Type | Notes |
-|---|---|---|
-| id | text | Primary key (session token) |
-| expires | timestamptz | Session expiry |
-| sessionToken | text | Unique |
-| userId | uuid | Foreign key to users(id) |
-
-**Constraints:**
-- Foreign key: `sessions.userId → users(id) ON DELETE CASCADE`
-- Unique: `sessionToken`
-
-Note: the exact Auth.js adapter schema is what Drizzle will produce; S6 does not modify Auth.js's internal schema.
+- `UNIQUE INDEX idx_user_username ON user(username)` — for login lookup (FR-001).
+- Better Auth's standard indexes on session.token, account.(userId, providerId), etc. — applied by the adapter.
 
 ### 9.4 No additional tables
 
@@ -1293,26 +1641,36 @@ S6 defines no external integration contracts because there are none.
 
 ### 12.1 Identity source
 
-Local database (`users` table, Section 9.3.2). No external identity provider in V1.
+Local database (`user` table managed by Better Auth Drizzle adapter, Section 9.3.2). No external identity provider in V1. No OAuth in V1 (FR-004 — no public registration; ADMIN and Fantomas are bootstrapped, not self-registered).
 
 ### 12.2 Credential and session model
 
-- **Credentials**: login + password (bcrypt-hashed, TD-009).
-- **Session strategy**: database (Auth.js Drizzle adapter persists sessions in the `sessions` table).
-- **Session cookie**: `next-auth.session-token`, httpOnly, secure (production), SameSite=Lax.
-- **Session lifetime**: 30 days (default Auth.js; can be tuned).
-- **Session expiry pruning**: lazy — on each access, Auth.js checks the `expires` column and deletes expired sessions. No cron job (S0 §23).
+- **Auth library**: Better Auth (TD-003 revised), with Drizzle adapter, username/password credentials, database sessions, public sign-up disabled.
+- **Credentials**: username (the `username` column on the `user` table) + password. The password is hashed by Better Auth using scrypt (Node.js built-in crypto.scrypt) — per TD-009 revised. The hash is stored in the `account` table (Better Auth's standard credential-account record), NOT in a custom column.
+- **Session strategy**: database (Better Auth persists sessions in the `session` table via its Drizzle adapter). Sessions are NOT JWT-based in V1 — database sessions are preferred for stateful admin back-office (immediate invalidation on logout, auditable).
+- **Session cookie**: Better Auth's session cookie (`better-auth.session_token` or similar — the exact name is set by Better Auth config), httpOnly, secure (production), SameSite=Lax.
+- **Session lifetime**: 7 days (Better Auth default; can be tuned via Better Auth config).
+- **Session expiry pruning**: lazy — Better Auth checks the `expiresAt` column on access and deletes expired sessions. No cron job (S0 §23).
+- **Sign-up disabled**: Better Auth's `signUp` endpoint is disabled in the config (`emailAndPassword.signUp.disabled = true` or equivalent). No public registration. Users are created ONLY via the bootstrap script (TD-020) or by Fantomas post-bootstrap (deferred to V2 admin UI).
 
 ### 12.3 Login flow (FR-001)
 
 ```
 Client → POST (form action) → Server Action `loginAction`
-  → Zod validates input ({ login, password })
-  → Auth.js `authorize` callback queries users by login
-  → If user found: bcrypt.compare(password, user.password_hash)
-    → If match: return user (Auth.js creates session, sets cookie)
-    → If no match: return null (FR-001-ERR: do not disclose which field is wrong)
-  → If user not found: return null (same response — no information leak)
+  → In-memory rate limiter checks per-IP counter (TD-031); if exceeded, return generic error
+  → Zod validates input ({ username, password })
+  → Server Action calls Better Auth's signIn server-side:
+      auth.api.signInEmail({ body: { username, password } })
+      (or the username-specific Better Auth endpoint)
+  → Better Auth:
+    → Queries user by username
+    → If user found: verifies password via scrypt
+      → If match: creates a session record in the `session` table, sets the
+        httpOnly cookie in the response, returns success
+      → If no match: returns failure (FR-001-ERR: do not disclose which field
+        is wrong — Better Auth returns the same error shape for "user not
+        found" and "wrong password")
+    → If user not found: returns the same failure (no information leak)
   → Server Action returns { ok: true } or { ok: false, error: 'Identifiants invalides' }
   → On success: redirect to /admin/offres
   → On failure: re-render login page with error
@@ -1322,34 +1680,44 @@ Client → POST (form action) → Server Action `loginAction`
 
 ```
 Client → POST (form action) → Server Action `logoutAction`
-  → Auth.js `signOut()` invalidates session in DB and clears cookie
+  → Server Action calls Better Auth's signOut server-side:
+      auth.api.signOut({ headers })
+  → Better Auth: deletes the session record in the `session` table, clears the cookie
   → Redirect to /admin/login
 ```
 
-### 12.5 Bootstrap of initial users (TD-020)
+### 12.5 Bootstrap of initial users (TD-020 revised)
 
 ```
 After first production deploy:
-  OWNER/operator runs `pnpm db:seed` (or `pnpm db:bootstrap`)
-    → seed/bootstrap.ts:
+  OWNER/operator runs `pnpm db:bootstrap` (NOT `pnpm db:seed` — see TD-020 revised
+  for the seed-vs-bootstrap distinction)
+    → db/bootstrap/bootstrap.ts:
       → Reads FANTOMAS_INITIAL_PASSWORD env var
-      → If no user with login='Fantomas':
-        → bcrypt.hash(FANTOMAS_INITIAL_PASSWORD, 12) → password_hash
-        → INSERT INTO users (login='Fantomas', password_hash, role='fantomas')
+      → If no user with username='Fantomas':
+        → Calls Better Auth's createUser server-side:
+            auth.api.createUser({ body: { username: 'Fantomas', password:
+            FANTOMAS_INITIAL_PASSWORD, role: 'fantomas', ... } })
+        → Better Auth hashes the password (scrypt) and persists the user +
+          credential-account record
         → Log "Fantomas principal created"
-      → Else: log "Fantomas already exists — not recreated"
-      → For each admin in db/seed/admins.ts (a config file):
-        → If no user with that login:
-          → bcrypt.hash(admin.password_from_env_var, 12)
-          → INSERT
+      → Else: log "Fantomas already exists — not recreated (no overwrite)"
+      → For each admin in db/bootstrap/config.ts:
+        → If no user with that username:
+          → Calls auth.api.createUser with the admin's username + env-var password
       → Log summary
 ```
 
-The seed script is idempotent. Re-running it does NOT overwrite existing users (so password rotations are preserved). It does NOT log passwords.
+The bootstrap script is idempotent. Re-running it does NOT overwrite existing users (so password rotations are preserved — the script checks existence before calling createUser). It does NOT log passwords. It does NOT hash passwords itself — Better Auth's createUser does that internally.
 
-### 12.6 Password reset
+### 12.6 Separation of concerns (OWNER §2)
 
-OUT OF SCOPE V1 (DR-050). For V1, password reset for an ADMIN is done by Fantomas directly modifying the DB (via a break-glass operation) or by re-running the seed script for that user (which would not overwrite if the user exists — so the operator must first delete the user, then re-seed). This is acceptable for V1's small admin team. A self-service reset flow is deferred to V2.
+- **Better Auth authenticates**: verifies credentials, creates and manages sessions, handles password hashing. S6 does NOT implement these.
+- **Our `can()` / `requireCapability()` layer authorizes**: checks capabilities per AISE §21. S6 implements this (Section 13). The authorization layer is INDEPENDENT of the auth library — it only reads the `role` field from the session's user. If Better Auth were replaced by another library tomorrow, the authorization layer would still work as long as the new auth library populates the `role` field in the session.
+
+### 12.7 Password reset
+
+OUT OF SCOPE V1 (DR-050). For V1, password reset for an ADMIN is done by Fantomas directly (via a V2 admin UI break-glass action, deferred) or by re-running the bootstrap script for that user after deleting the user (the script does not overwrite existing users). This is acceptable for V1's small admin team. A self-service reset flow is deferred to V2.
 
 ---
 
@@ -1362,38 +1730,42 @@ OUT OF SCOPE V1 (DR-050). For V1, password reset for an ADMIN is done by Fantoma
 | ADMIN | `'admin'` | All offer lifecycle operations (PERM-002); no Fantomas-specific capabilities |
 | FANTOMAS | `'fantomas'` | All ADMIN capabilities + Fantomas-specific bootstrap / recovery / break-glass (AISE §14, §21) |
 
-### 13.2 Authorization abstraction
+### 13.2 Authorization abstraction (revised per OWNER §2, §3)
 
-To avoid duplicating auth checks across Server Actions, S6 defines a single reusable helper in `lib/server/auth.ts`:
+The authorization layer is INDEPENDENT of the auth library (OWNER §2). Better Auth authenticates and provides the session; our `can()` / `requireCapability()` layer authorizes. The layer reads only the `role` field from the session — it does not import Better Auth types or call Better Auth functions for capability checks.
+
+S6 defines a single reusable helper module in `lib/server/auth/authorization.ts`:
 
 ```typescript
 // Conceptual signature (not implementation code in S6):
 type Principal = {
   id: string;
-  login: string;
+  username: string;
   role: 'admin' | 'fantomas';
 };
 
-// Returns the current principal or null if unauthenticated.
-async function getPrincipal(): Promise<Principal | null>;
-
-// Throws (or returns a redirect) if not authenticated.
-async function requireAdmin(): Promise<Principal>;
-
-// Returns true if the principal has a given capability.
-function can(principal: Principal, capability: Capability): boolean;
-```
-
-The `can` function is the authorization abstraction. Capabilities are:
-
-```typescript
 type Capability =
   | 'offer:create' | 'offer:edit' | 'offer:save'
   | 'offer:publish' | 'offer:suspend' | 'offer:republish' | 'offer:archive'
   | 'admin:login'  // access back-office
   | 'system:bootstrap'  // Fantomas-only
   | 'system:recovery'; // Fantomas-only
+
+// Returns the current principal or null if unauthenticated.
+// Internally calls Better Auth's getSession() and maps the result to our
+// Principal type (reading the role field). The mapping is the ONLY place
+// where Better Auth is imported in the authorization layer.
+async function getPrincipal(): Promise<Principal | null>;
+
+// Returns the principal if authenticated AND having the given capability.
+// Throws an authorization error (or returns a redirect) if not.
+async function requireCapability(capability: Capability): Promise<Principal>;
+
+// Returns true if the principal has a given capability. Pure function.
+function can(principal: Principal, capability: Capability): boolean;
 ```
+
+The `requireCapability()` function (renamed from `requireAdmin()` per OWNER §3 — avoid role-name-coupled API) is the canonical entry point for Server Actions. Each Server Action calls `requireCapability('offer:create')` (or the relevant capability) at the top. This avoids duplicating `if role === ...` checks across the codebase — there is exactly one place (the `can()` function) that decides which role has which capability.
 
 ### 13.3 Capability matrix (per AISE §21)
 
@@ -1431,13 +1803,19 @@ function can(principal: Principal, capability: Capability): boolean {
 }
 ```
 
-This satisfies AISE §21 exactly: every ADMIN (SUPER_ADMIN in future) capability is also authorized to Fantomas; Fantomas has additional capabilities; ADMIN does not inherit Fantomas-only capabilities.
+This satisfies AISE §21 exactly:
+- Every ADMIN capability is also authorized to Fantomas (Fantomas inherits ADMIN_CAPABILITIES).
+- Fantomas has additional capabilities (FANTOMAS_EXTRA_CAPABILITIES).
+- ADMIN does NOT inherit Fantomas-only capabilities (the `if role === 'fantomas'` branch is the only path to FANTOMAS_EXTRA_CAPABILITIES).
+
+**Future SUPER_ADMIN (DR-051)**: if a future version adds a formal SUPER_ADMIN role, the matrix extends: SUPER_ADMIN_CAPABILITIES = ADMIN_CAPABILITIES (or a superset); FANTOMAS inherits SUPER_ADMIN_CAPABILITIES + FANTOMAS_EXTRA_CAPABILITIES. This does NOT require creating SUPER_ADMIN in V1 — V1 has only ADMIN and FANTOMAS. The `can()` abstraction makes the future extension a localized change.
 
 ### 13.4 Server-side enforcement points
 
-- **Middleware** (`middleware.ts`): protects `/admin/*` routes. If no valid session → redirect to `/admin/login`. This is the first line of defense.
+- **Middleware** (`middleware.ts`): protects `/admin/*` routes. Calls Better Auth's session check; if no valid session → redirect to `/admin/login`. This is the first line of defense (authentication only — no capability check here, since middleware runs on every request and capability checks are per-action).
 - **Layout guard** (`app/admin/layout.tsx`): double-checks session via `getPrincipal()`. If null → redirect (defense in depth).
-- **Each Server Action**: calls `requireAdmin()` first. For Fantomas-only actions (none in V1's normal UI, but the bootstrap script uses Fantomas), the action would call `can(principal, 'system:bootstrap')`.
+- **Each Server Action**: calls `requireCapability(capability)` first, where `capability` is the action's required capability (e.g., `offer:create`, `offer:publish`). The `requireCapability` helper internally calls `getPrincipal()` (which calls Better Auth's `getSession()`) and `can()`. If either fails, the action returns an authorization error.
+- For Fantomas-only actions (none in V1's normal UI; the bootstrap script uses `system:bootstrap`), the action calls `requireCapability('system:bootstrap')`.
 - **No client-side authorization**: client components render based on session info passed from the server, but all mutations are validated server-side. The client UI hides admin controls from public visitors, but the server is the authority (NFR-012, standard security practice).
 
 ### 13.5 No client trust
@@ -1456,19 +1834,19 @@ Fantomas is NOT exposed as a role in the admin UI's role picker (there is no rol
 
 | Boundary | Mechanism |
 |---|---|
-| Public → Admin | Auth.js middleware + layout guard |
+| Public → Admin | Better Auth middleware + layout guard |
 | Public → non-PUBLISHED offer data | Server-side filter `WHERE status = 'PUBLISHED'` + 404 on non-PUBLISHED detail |
-| Admin mutations | Server Actions with `requireAdmin()` + Zod validation |
+| Admin mutations | Server Actions with `requireCapability()` + Zod validation (Section 13) |
 | Form input → DB | Zod server-side (TD-008); client validation is UX-only |
-| Rich content (description) | Tiptap JSON stored (no raw HTML in DB); rendered server-side via Tiptap's HTML generator (no user-supplied HTML is rendered directly) |
+| Rich content (description) | Tiptap JSON stored (no raw HTML in DB); rendered via Tiptap React server-side renderer (no HTML string roundtrip, no dangerouslySetInnerHTML with user content — TD-013 revised) |
 | Secrets → Code | S0 §13: no secrets in repo; S0 §25: secrets via Vercel env vars |
 | Preview → Production DB | TD-019: distinct DATABASE_URL per Vercel environment |
 
 ### 14.2 Authentication and authorization
 
 - Covered in Sections 12 and 13.
-- Password storage: bcrypt (TD-009), never plaintext (NFR-010).
-- Session: httpOnly, secure, SameSite=Lax (TD-028).
+- Password storage: scrypt via Better Auth default (TD-009 revised), never plaintext (NFR-010).
+- Session: Better Auth database session; cookie httpOnly, secure (production), SameSite=Lax (TD-028, TD-003 revised).
 
 ### 14.3 Input validation and output encoding
 
@@ -1487,9 +1865,9 @@ Fantomas is NOT exposed as a role in the admin UI's role picker (there is no rol
 |---|---|---|
 | `DATABASE_URL` (Production) | Vercel env var (Production) | Neon password rotation; update Vercel env var |
 | `DATABASE_URL` (Preview) | Vercel env var (Preview) | Same, per preview environment |
-| `AUTH_SECRET` | Vercel env var | Regenerate; update Vercel env var; rotate sessions (Auth.js invalidates old sessions on secret change) |
-| `FANTOMAS_INITIAL_PASSWORD` | Vercel env var (Production only — set once at first deploy) | Once bootstrapped, the bcrypt hash is in the DB. Rotation = `bcrypt.hash(newPassword)` via a recovery script or V2 admin UI. The env var can be removed from Vercel after first seed. |
-| Initial ADMIN passwords | Same pattern — env vars at first deploy, hash stored, env var removed after seed | Same |
+| `BETTER_AUTH_SECRET` | Vercel env var | Regenerate; update Vercel env var; rotate sessions (Better Auth invalidates old sessions on secret change) |
+| `FANTOMAS_INITIAL_PASSWORD` | Vercel env var (Production only — set once at first deploy) | Once bootstrapped, the scrypt hash is in the DB (via Better Auth). Rotation = re-bootstrap (delete user, re-run bootstrap with new env var) OR a V2 admin UI break-glass action. The env var can be removed from Vercel after first bootstrap. |
+| Initial ADMIN passwords | Same pattern — env vars at first deploy, scrypt hash stored via Better Auth, env var removed after bootstrap | Same |
 
 Per S0 §13: NO secret is committed to the repository, written to logs, displayed in error messages, or stored in `.env.example` (only placeholder names like `FANTOMAS_INITIAL_PASSWORD=...`).
 
@@ -1516,7 +1894,7 @@ Per S0 §13: NO secret is committed to the repository, written to logs, displaye
 
 - Archived offers retained indefinitely (FR-034, BR-024).
 - No physical deletion in V1 (OOS-019).
-- Sessions expire per Auth.js default; expired sessions are pruned lazily.
+- Sessions expire per Better Auth default; expired sessions are pruned lazily.
 
 ### 14.10 Rate limiting
 
@@ -1544,7 +1922,7 @@ V1 has no formal uptime SLO (Charter §13). The failure model is pragmatic.
 |---|---|---|
 | Database unreachable (Neon) | Drizzle query throws | Server Action returns `{ ok: false, error: 'Service indisponible' }`. UI shows a generic error message. Vercel logs the error. |
 | Invalid input | Zod parse throws | Server Action returns field-level errors. UI shows them next to the corresponding fields (FR-023-ERR, FR-024-ERR). |
-| Auth failure (invalid credentials) | bcrypt.compare returns false | FR-001-ERR: generic "Identifiants invalides" (no leak of which field is wrong). |
+| Auth failure (invalid credentials) | Better Auth signIn returns failure (no distinction between "user not found" and "wrong password") | FR-001-ERR: generic "Identifiants invalides" (no leak of which field is wrong). |
 | Auth failure (no session on admin route) | Middleware/layout guard | Redirect to /admin/login. |
 | Offer not found (public detail) | Drizzle returns null | FR-042: 404 page (no distinction between "not found" and "not PUBLISHED"). |
 | Offer not found (admin edit) | Drizzle returns null | 404 in admin (or redirect to admin list with a "not found" toast). |
@@ -1559,7 +1937,7 @@ V1 has no degraded mode — if the database is down, the public list returns an 
 
 ### 15.3 Restart and recovery
 
-- Vercel serverless functions are stateless; restarts are transparent. Auth.js sessions are in the DB, so they survive restarts.
+- Vercel serverless functions are stateless; restarts are transparent. Better Auth sessions are in the DB, so they survive restarts.
 - Neon PITR is the primary data recovery mechanism (Section 8.7).
 - Application code is stateless; no in-memory state to recover.
 
@@ -1659,7 +2037,7 @@ S6 does NOT design for "millions of users" (no approved requirement). If V1 grow
 ### 18.3 Mocking discipline (S6 §18)
 
 - **Database**: NEVER mocked in integration tests. Use a real Neon preview branch or local PostgreSQL. This catches SQL errors, schema mismatches, and Drizzle type issues that mocks would hide.
-- **Auth**: in non-auth-focused tests, mock the session (set the principal directly). In auth-focused tests (login, logout, capability checks), use the real Auth.js flow.
+- **Auth**: in non-auth-focused tests, mock the session (set the principal directly). In auth-focused tests (login, logout, capability checks), use the real Better Auth flow.
 - **External APIs**: N/A in V1.
 - **Time**: where time-dependent logic exists (e.g., published_at), use `vi.useFakeTimers()` in Vitest to control timestamps.
 
@@ -1726,48 +2104,72 @@ Per S0 §23 (zero scheduled work), no cron, no background monitoring, no alertin
 
 ## 20. Configuration / Environments
 
-### 20.1 Environments (per TD-019)
+### 20.1 Environments (per TD-019, revised per OWNER §10)
+
+Strict separation between Production and Preview is enforced (Charter §10 MANDATED, TD-019). Local dev must NEVER accidentally write to Production.
 
 | Environment | Purpose | Database | Vercel env | Secrets |
 |---|---|---|---|---|
-| Local dev | Developer's machine | Local PostgreSQL OR developer's Neon branch | `.env.local` (not committed) | Developer-local DATABASE_URL, AUTH_SECRET, FANTOMAS_INITIAL_PASSWORD |
-| Preview | Per-PR deployment | Neon preview branch (auto-provisioned) | Vercel Preview env vars | Preview DATABASE_URL, AUTH_SECRET, FANTOMAS_INITIAL_PASSWORD (test value) |
-| Production | Live site | Neon main branch | Vercel Production env vars | Production DATABASE_URL, AUTH_SECRET, FANTOMAS_INITIAL_PASSWORD (real value, set once at first deploy) |
+| Local dev | Developer's machine | Local PostgreSQL OR developer's own Neon branch (NOT the production main branch, NOT shared preview branches) | `.env.local` (not committed) | Developer-local DATABASE_URL, BETTER_AUTH_SECRET, FANTOMAS_INITIAL_PASSWORD |
+| Preview | Per-PR Vercel deployment | Neon preview branch (auto-provisioned by Neon-Vercel integration, one per PR; isolated, ephemeral) | Vercel Preview env vars | Preview DATABASE_URL, BETTER_AUTH_SECRET, FANTOMAS_INITIAL_PASSWORD (test value, can be a known dev password like "fantomas-preview") |
+| Production | Live site | Neon main branch (dedicated, single, protected) | Vercel Production env vars | Production DATABASE_URL, BETTER_AUTH_SECRET, FANTOMAS_INITIAL_PASSWORD (real OWNER-provided value, set once at first deploy, then env var can be removed after bootstrap) |
+
+**Isolation guarantees:**
+- The Neon main branch (Production) is NEVER shared with Preview or Local dev. The Neon-Vercel integration auto-creates ephemeral preview branches per PR; these are isolated from the main branch.
+- Local dev uses either a local PostgreSQL instance OR a developer-specific Neon branch created from main (NEVER the main branch itself). The developer's `DATABASE_URL` in `.env.local` points to this isolated branch.
+- Vercel Production env vars are distinct from Vercel Preview env vars — Vercel enforces this separation; a Preview deployment reads Preview env vars, not Production env vars.
+- The Neon main branch should be protected (Neon's branch-protection feature, if available) to prevent accidental drops.
 
 ### 20.2 Environment variables
 
 | Variable | Scope | Example value | Notes |
 |---|---|---|---|
-| `DATABASE_URL` | All | `postgresql://...neon.tech/db?sslmode=require` | Neon connection string |
-| `AUTH_SECRET` | All | (random 32+ char string) | Used by Auth.js to sign sessions |
-| `AUTH_TRUST_HOST` | All | `true` | Required by Auth.js on Vercel |
-| `FANTOMAS_INITIAL_PASSWORD` | All (set once on first deploy) | (OWNER-provided value) | Used by seed script; can be removed after first seed |
-| `NEXT_PUBLIC_SITE_URL` | All | `https://jourdain-emploi.example.com` | For sitemap/SEO |
-| `INITIAL_ADMIN_LOGIN` | Optional (first deploy only) | `admin1` | Used by seed script for first ADMIN |
-| `INITIAL_ADMIN_PASSWORD` | Optional (first deploy only) | (value) | Used by seed script for first ADMIN |
+| `DATABASE_URL` | All | `postgresql://...neon.tech/db?sslmode=require` | Neon connection string (different per environment per 20.1) |
+| `BETTER_AUTH_SECRET` | All | (random 32+ char string) | Used by Better Auth to sign session tokens |
+| `BETTER_AUTH_URL` | All | `https://jourdain-emploi.example.com` (production) | Better Auth base URL (the deployment URL) |
+| `FANTOMAS_INITIAL_PASSWORD` | All (set once on first deploy, then can be removed) | (OWNER-provided value) | Used by the bootstrap script (TD-020); plaintext is hashed by Better Auth at bootstrap; env var can be removed from Vercel after first bootstrap |
+| `NEXT_PUBLIC_SITE_URL` | All | `https://jourdain-emploi.example.com` | For sitemap/SEO (TD-029) |
+| `INITIAL_ADMIN_LOGIN` | Optional (first deploy only) | `admin1` | Used by bootstrap script for first ADMIN (per TD-020) |
+| `INITIAL_ADMIN_PASSWORD` | Optional (first deploy only) | (value) | Used by bootstrap script for first ADMIN; env var can be removed after bootstrap |
+| `LOGIN_RATE_LIMIT_MAX` | Optional | `5` | Max failed login attempts per IP per window (TD-031); default 5 |
+| `LOGIN_RATE_LIMIT_WINDOW_MIN` | Optional | `15` | Rate-limit window in minutes (TD-031); default 15 |
 
 ### 20.3 `.env.example` (committed placeholder — no real values)
 
 ```
+# Database (Neon) — different per environment (Production / Preview / Local)
 DATABASE_URL=postgresql://user:password@host/db?sslmode=require
-AUTH_SECRET=generate-a-32+-char-random-string
-AUTH_TRUST_HOST=true
+
+# Better Auth
+BETTER_AUTH_SECRET=generate-a-32+-char-random-string
+BETTER_AUTH_URL=http://localhost:3000
+
+# Bootstrap (set once on first deploy per environment, then can be removed)
 FANTOMAS_INITIAL_PASSWORD=set-at-first-deploy-then-rotate
-NEXT_PUBLIC_SITE_URL=https://example.com
 INITIAL_ADMIN_LOGIN=admin1
 INITIAL_ADMIN_PASSWORD=set-at-first-deploy-then-rotate
+
+# Public site URL (for sitemap/SEO)
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+
+# Login rate limiting (optional, defaults shown)
+LOGIN_RATE_LIMIT_MAX=5
+LOGIN_RATE_LIMIT_WINDOW_MIN=15
 ```
 
-This file is committed with placeholder values only (no real secrets — S0 §13). Real values are set in Vercel env vars.
+This file is committed with placeholder values only (no real secrets — S0 §13). Real values are set in Vercel env vars (Production + Preview separately) and in each developer's `.env.local` (not committed, listed in `.gitignore`).
 
-### 20.4 Target verification (S0 §25)
+### 20.4 Target verification (S0 §25, revised per OWNER §10)
 
-Before any write to Production:
-- Verify the target environment (Vercel Production env var `VERCEL_ENV === 'production'`).
-- Verify the database is the Neon main branch (check `DATABASE_URL` host against the production Neon hostname).
-- If target not verified → STOP (no write).
+Before any write to Production (migrations, bootstrap, any production-only Server Action):
+1. **Verify the target environment**: check `process.env.VERCEL_ENV === 'production'` (Vercel sets this automatically). If not production → STOP, do not run the production-only code path.
+2. **Verify the database is the Neon main branch**: check `process.env.DATABASE_URL` host against the production Neon hostname (e.g., `ep-xxx-main.region.aws.neon.tech`). If the host does not match the production pattern → STOP, do not write. This prevents a Preview deployment's DATABASE_URL from accidentally pointing to production (or vice versa).
+3. **Verify the bootstrap has not already run** (for the bootstrap script): check if Fantomas already exists in the DB. If yes → log a warning and do not overwrite (idempotent, per TD-020).
+4. **Log the verification**: the bootstrap script and any production-only code path logs "target verified: production + main branch" before the first write, so the operator can confirm in Vercel logs.
 
-This is enforced in the seed script and in any future production-only mutation.
+This is enforced in the bootstrap script (TD-020) and in any future production-only Server Action. The migration script (`drizzle-kit migrate`) is run manually against production by the operator (per TD-018) — the operator is responsible for verifying they are targeting the production DATABASE_URL before running the command.
+
+**Local dev safeguard**: the developer's `.env.local` must point to a local PostgreSQL or a developer-specific Neon branch, NEVER to the production main branch. A pre-commit or pre-deploy check (e.g., a git hook or a CI check) can verify that `.env.local`'s DATABASE_URL host is not the production host — this is an S10 implementation detail.
 
 ---
 
@@ -1883,7 +2285,7 @@ S6 maps every critical S5 requirement to its design realization and verification
 
 | S5 ID | S5 requirement | S6 realization | Verification |
 |---|---|---|---|
-| FR-001 | Admin login | TD-003 (Auth.js Credentials), Section 12.3 | E2E step 1; integration test (loginAction) |
+| FR-001 | Admin login | TD-003 revised (Better Auth), Section 12.3 | E2E step 1; integration test (loginAction) |
 | FR-002 | Admin logout | TD-003, Section 12.4 | E2E step 15 |
 | FR-003 | Back-office denied to unauthenticated | middleware.ts + Section 13.4 | Integration test (unauthenticated request to /admin/offres → redirect) |
 | FR-004 | No public registration | No registration route; Section 12 | E2E: verify no /register route; component test |
@@ -1956,10 +2358,10 @@ S6 maps every critical S5 requirement to its design realization and verification
 | S5 ID | S6 realization | Verification |
 |---|---|---|
 | NFR-001 | Server Components + partial index + ISR | Lighthouse on public pages (manual) |
-| NFR-010 | bcrypt password hashing (TD-009) | Unit test (hash format) + DB inspection |
+| NFR-010 | scrypt password hashing via Better Auth default (TD-009 revised) | Unit test (hash format) + DB inspection (no plaintext column) |
 | NFR-011 | No secret in repo; S0 §13 + §25 | Code review (grep for secret patterns; .env.example has placeholders only) |
-| NFR-012 | httpOnly + secure + SameSite=Lax + Auth.js | Component test + browser DevTools inspection |
-| NFR-013 | Fantomas bootstrap via env var + seed (TD-020) | Integration test (seed script creates Fantomas with hashed password) |
+| NFR-012 | Better Auth database session + httpOnly + secure + SameSite=Lax cookie (TD-003 revised, TD-028) | Component test + browser DevTools inspection |
+| NFR-013 | Fantomas bootstrap via env var + idempotent bootstrap script (TD-020 revised) | Integration test (bootstrap script creates Fantomas with scrypt-hashed password via Better Auth) |
 | NFR-030 | Semantic HTML, shadcn/ui ARIA, keyboard nav | axe-core in E2E + manual keyboard test |
 | NFR-040 | French only; messages/fr.ts | Code review (no i18n framework; all strings in French) |
 | NFR-050 | created_at, updated_at, published_at columns | Schema inspection |
@@ -1979,54 +2381,57 @@ Compact risk register (S6 §27 — every risk has evidence or concrete scenario;
 |---|---|---|---|---|
 | Fantomas bootstrap password mishandling | S0 §13/§25; if accidentally committed, GitHub Secret Scanning may revoke access | High (system compromise if leaked; recovery blocked if revoked) | MITIGATE: env var only; seed script hashes; rotate after first use; TD-020 documents the procedure | OWNER + S6 |
 | Concurrent offer edit (last-write-wins) | Small admin team; rare in practice | Low (data loss for one edit; recoverable via Neon PITR) | ACCEPT for V1; add optimistic locking in V2 if it becomes an issue | S6 |
-| Auth.js v5 API churn | Auth.js v5 was stabilizing in 2024-2025; minor API changes possible | Low-Medium (build breaks; quick fix) | MITIGATE: pin Auth.js version; CI catches breaks | S6 |
+| Better Auth API churn | Better Auth was stabilizing in 2024-2025; minor API changes possible | Low-Medium (build breaks; quick fix) | MITIGATE: pin Better Auth version; CI catches breaks | S6 |
 | Drizzle migration failure on production | Migration may fail mid-way (rare with Drizzle) | Medium (production deploy blocked; manual recovery needed) | MITIGATE: enable Drizzle down migrations; test migrations on Preview first | S6 + operator |
 | Neon free tier limits | Free tier has compute/storage limits; V1 may hit them if volumetry grows unexpectedly | Low (warning before hard limit) | MONITOR: Vercel + Neon dashboards show usage. Upgrade tier if needed. | OWNER |
-| Tiptap rendering security (if a future extension allows raw HTML) | Currently Tiptap JSON → HTML is safe (no raw HTML); a future extension could introduce risk | Low (V1 has no such extension) | MITIGATE: do not enable `@tiptap/extension-html` or raw HTML paste in V1. Code review in S10. | S6 + S10 |
-| Vercel build failure due to native bcrypt dep | bcrypt npm package uses a native binding; build may fail on Vercel's build environment | Low (rare; bcrypt has prebuilt binaries for most platforms) | MITIGATE: if bcrypt fails, switch to `bcryptjs` (pure JS, slower but no native dep). Decision deferred to S10 if the issue arises. | S6 + S10 |
+| Tiptap rendering security (if a future extension allows raw HTML) | Currently V1 uses Tiptap React server-side renderer (no HTML string, no dangerouslySetInnerHTML — TD-013 revised); a future extension enabling raw HTML paste could introduce risk | Low (V1 has no such extension) | MITIGATE: do not enable `@tiptap/extension-html` or raw HTML paste in V1. Code review in S10. | S6 + S10 |
+| ~~Vercel build failure due to native bcrypt dep~~ | ~~bcrypt npm package uses a native binding~~ | RESOLVED — TD-009 revised uses Better Auth's scrypt (Node.js built-in crypto.scrypt, no native binding). The bcrypt build risk no longer applies. Risk removed from V1. | RESOLVED by TD-009 revised | N/A |
 | Public offer URL not SEO-optimized (uses UUID) | /offres/{uuid} is not keyword-rich | Low (Charter §13 — no quantitative SEO target) | ACCEPT for V1; revisit in V2 if SEO becomes a priority | OWNER |
 
 ---
 
-## 26. Open Technical Decisions
+## 26. Open Technical Decisions (revised per OWNER §7)
 
-S6 cannot close with blocking architecture ambiguity. The following items are explicitly NON-BLOCKING (can be resolved during S10 execution):
+OWNER revision §7 directs S6 to reclass the 5 items previously listed as "non-blocking, resolved in S10". S10 must primarily IMPLEMENT, not choose architecture tardively. The 5 items are reclassified as follows:
 
-| Open question | Why it matters | Options | Blocking? | Resolution |
-|---|---|---|---|---|
-| bcrypt vs bcryptjs (if native build fails on Vercel) | Build reliability | bcrypt (native, faster) / bcryptjs (pure JS, slower, no native dep) | NO | S10: try bcrypt first; fall back to bcryptjs if Vercel build fails |
-| pg_trgm index creation timing | Public/admin search perf | Create in initial migration / add later if needed | NO | S10: defer; add via a new migration if integration tests or production profiling shows ILIKE > 100ms |
-| Public search route handler vs URL search params | Code organization | URL search params (`/offres?q=`) / route handler returning JSON | NO | S10: default to URL search params (server-rendered); add route handler only if a debounced Client Component search is implemented |
-| Login rate limiting implementation | Security (brute-force protection) | DB table / in-memory / Vercel KV (paid) | NO | S10: implement a simple in-memory limiter (cleared on restart, acceptable for V1) or defer to V2 |
-| Drizzle down migrations | Rollback safety | Enable / disable | NO | S10: enable (`drizzle-kit generate --journal` produces both up and down) for safety |
+| Previous open item | Reclassification (per OWNER §7) | Final status |
+|---|---|---|
+| bcrypt vs bcryptjs | RESOLVED by TD-009 revised — Better Auth handles password hashing with scrypt by default. No bcrypt or bcryptjs dependency. The question disappears entirely. | CLOSED in S6 |
+| pg_trgm index creation timing | RESOLVED by TD-016 revised — pg_trgm is OPTIONAL PERFORMANCE OPTIMIZATION, not a V1 initial requirement. V1 ships WITHOUT pg_trgm. If profiling proves the need later, a forward migration adds it (per TD-018 doctrine). | CLOSED in S6 (deferred as measured optimization, not an open question) |
+| Public search route handler vs URL search params | RESOLVED by TD-016 revised — public search is implemented as a Server Component reading `?q=` searchParams, querying the DB via Drizzle, rendering the filtered list server-side. NO public API route handler is created (avoids creating a "public API" that V1 excludes — INT-001, OOS-015). | CLOSED in S6 |
+| Login rate limiting implementation | RESOLVED architecturally by TD-031 — in-memory per-IP rate limiter with configurable threshold (default 5 per 15 min). The architectural decision (in-memory, no DB, no external service) is made in S6. Only the concrete sliding-window vs token-bucket implementation detail is deferred to S10. | CLOSED in S6 (architecture); S10 implements the chosen architecture |
+| Drizzle down migrations | RESOLVED by TD-018 revised — V1 prefers FORWARD CORRECTIVE migrations over automatic down migrations. Down migrations are retained only for purely additive migrations (add column, add table, add index) where the up is reversible without data loss. For destructive or transformative migrations, forward correction is the rollback path. | CLOSED in S6 |
 
 **BLOCKING technical decisions: 0.**
+**NON-BLOCKING open technical decisions: 0.**
 
-S6 can close. All material architecture decisions are DECIDED. The non-blocking items above can be resolved during S10 implementation without re-opening S6.
+All 5 previously-open items are now CLOSED in S6 — they have an architectural decision recorded in the relevant TD. S10 implements the decisions; S10 does NOT re-choose architecture. S6 can close.
 
 ---
 
-## 27. ADR Candidates for S7
+## 27. ADR Candidates for S7 (revised)
 
 The following S6 decisions are structuring enough to warrant durable ADR treatment in S7 (per S6 §33 handoff):
 
 | TD ID | Decision | Why ADR-worthy |
 |---|---|---|
 | TD-001 | Modular monolith Next.js full-stack | Architecture-defining; bounds future scope |
-| TD-003 | Auth.js Credentials + bcrypt + database session | Security-relevant; hard to change later |
+| TD-003 (revised) | Better Auth (Drizzle adapter, username/password, database sessions, sign-up disabled) + can()/requireCapability() authorization layer independent of auth library | Security-relevant; separation of auth/authorization is a structuring pattern; hard to change later |
 | TD-004 | Drizzle ORM | Cross-cutting; affects all DB code |
 | TD-006 | Server Components + Server Actions (no TanStack Query) | Architectural pattern; affects all data flows |
-| TD-009 | bcrypt for password hashing | Security-relevant |
-| TD-013 | Tiptap JSON storage + server-side HTML render | Affects description schema, editor, rendering, sanitization |
-| TD-014 | /offres/{id} URL strategy | Public-facing; affects SEO and external links |
-| TD-018 | Drizzle Kit migrations (with down migrations enabled) | Affects all schema evolution |
-| TD-019 | Vercel Production + Preview with Neon main + preview branches | Security-critical (Preview/Production isolation) |
-| TD-020 | Bootstrap of Fantomas and initial ADMIN via idempotent seed + env vars | Security-critical; AISE-mandated |
+| TD-009 (revised) | Better Auth default password hashing (scrypt) | Security-relevant; coupled to TD-003 |
+| TD-013 (revised) | Tiptap JSON storage + Tiptap React server-side renderer (no HTML string roundtrip) | Affects description schema, editor, rendering; safety contract |
+| TD-014 | /offres/{id} URL strategy (UUID v4) | Public-facing; affects SEO and external links |
+| TD-018 (revised) | Drizzle Kit migrations + forward corrective doctrine (no push against Production; no down-migration reliance) | Affects all schema evolution and rollback safety |
+| TD-019 | Vercel Production + Preview with Neon main + preview branches (strict isolation + target verification) | Security-critical (Preview/Production isolation) |
+| TD-020 (revised) | Bootstrap of Fantomas and initial ADMIN via idempotent bootstrap script + env vars (separate from demo seed) | Security-critical; AISE-mandated; seed-vs-bootstrap distinction |
 | TD-021 | Free text for Entreprises/Secteurs/Catégories (no CRUD modules) | Bounds future scope |
 | TD-024 | Testing architecture (Vitest + RTL + Playwright, real DB in integration) | Affects all tests |
 | TD-028 | CSRF via Next.js Server Actions origin check + SameSite=Lax | Security-relevant |
+| TD-030 | @neondatabase/serverless driver (matched to V1's short transactions; no TCP driver) | Affects all DB connection code |
+| TD-031 | In-memory login rate limiting (no DB, no external service) | Security-relevant; coupled to TD-003 |
 
-The remaining TDs (TD-002, TD-005, TD-007, TD-008, TD-010, TD-011, TD-012, TD-015, TD-016, TD-017, TD-022, TD-023, TD-025, TD-026, TD-027, TD-029) are either MANDATED (not choices) or implementation details that don't need durable ADR treatment.
+The remaining TDs (TD-002, TD-005, TD-007, TD-008, TD-010, TD-011, TD-012, TD-015, TD-016, TD-017, TD-022, TD-023, TD-025, TD-026, TD-027, TD-029) are either MANDATED (not choices — TD-002) or implementation details / standard tool choices that don't need durable ADR treatment.
 
 ---
 
@@ -2035,19 +2440,23 @@ The remaining TDs (TD-002, TD-005, TD-007, TD-008, TD-010, TD-011, TD-012, TD-01
 S6 hands off to S7 (Project Manifest + ADR):
 
 - **APPROVED TECHNICAL_SPECIFICATION** (this document, once OWNER approves)
-- **TECHNICAL DECISION LIST**: TD-001 through TD-029 (Section 5 + Section 27)
-- **ADR CANDIDATES**: 13 ADRs (Section 27)
+- **TECHNICAL DECISION LIST**: TD-001 through TD-031 (Section 5 + Section 27)
+- **ADR CANDIDATES**: 15 ADRs (Section 27)
 - **SELECTED STACK**: Section 7
 - **ARCHITECTURAL BOUNDARIES**: Section 6 (module map + dependency direction rule)
 - **CANONICAL TECHNICAL CONSTRAINTS**:
   - Modular monolith (no microservices / no backend séparé)
   - PostgreSQL on Neon (MANDATED)
   - Vercel Production + Preview (MANDATED)
-  - Drizzle ORM (TD-004)
-  - Auth.js (TD-003)
-  - bcrypt (TD-009)
-  - Tiptap JSON storage (TD-013)
-  - /offres/{id} URLs (TD-014)
+  - Drizzle ORM + @neondatabase/serverless (TD-004, TD-030)
+  - Better Auth + can()/requireCapability() authorization layer (TD-003 revised)
+  - scrypt password hashing via Better Auth default (TD-009 revised)
+  - Tiptap JSON storage + Tiptap React server-side renderer (TD-013 revised)
+  - /offres/{id} URLs with UUID v4 (TD-014, TD-015)
+  - PostgreSQL ILIKE search via Server Component + searchParams (TD-016 revised)
+  - Drizzle Kit migrations with forward corrective doctrine (TD-018 revised)
+  - Idempotent bootstrap separate from demo seed (TD-020 revised)
+  - In-memory login rate limiting (TD-031)
   - No public API, no notifications, no automatic expiration, no physical deletion, no multi-tenant, no multilingual, no complex RBAC (all per S5)
   - AISE S0 invariants: §13, §14/§21, §23, §24, §25
 
@@ -2059,47 +2468,58 @@ S6 does NOT create ADR files. S7 creates the durable ADR files based on this han
 
 | Field | Value |
 |---|---|
-| Document status | DRAFT — PENDING OWNER APPROVAL |
+| Document status | FINAL DRAFT — READY FOR OWNER APPROVAL |
 | Charter reference | `docs/planning/PROJECT_CHARTER.md` at `fa377c1` |
 | Product requirements reference | `docs/product/PRODUCT_REQUIREMENTS.md` at `9ec4a08` |
-| S6 draft date | 2026-09-14 |
+| S6 initial draft date | 2026-09-14 |
+| S6 revision date | 2026-09-15 (after OWNER revision decisions §1–§15) |
 | S6 OWNER approval | PENDING |
 | S6 closure (S6 CLOSED / PASS) | PENDING — requires OWNER approval |
 | Next recommended component | S7 — Project Manifest + ADR |
 
 Per AISE S6 §30, the baseline is NOT valid until OWNER explicitly approves it. OWNER's absence of objection is NOT approval — explicit acknowledgment is required.
 
-### 29.1 Quality gate self-check (per S6 §34)
+### 29.1 Quality gate self-check (per S6 §34, revised per OWNER §14)
 
 | Check | Result |
 |---|---|
 | Blocking product ambiguities | 0 (S5 baseline approved with 0 blocking) |
-| Blocking technical decisions | 0 (Section 26) |
+| Blocking technical decisions | 0 (Section 26 — all 5 previously-open items CLOSED in S6) |
 | Unaddressed critical S5 requirements | 0 (Section 24 — every MUST mapped) |
 | S6 decisions contradicting S5 | 0 (no S5 requirement altered; all decisions preserve S5 semantics) |
 | Unjustified major technical complexity | 0 (modular monolith, single DB, no cache, no async infra, no external API — all per OWNER S6 anti-overengineering) |
-| Mandated constraints ignored | 0 (all MANDATED constraints applied: React, Next.js, TS, App Router, Vercel, Neon, Production/Preview isolation, pnpm, Tailwind, Zod) |
+| Mandated constraints ignored | 0 (all MANDATED constraints applied: React, Next.js, TS, App Router, Vercel, Neon, Production/Preview isolation) |
+| **PREFERENCE silently converted to MANDATED (OWNER §1)** | **0** — Zod, Tailwind, pnpm, Better Auth, Drizzle, TanStack Query, React Hook Form, shadcn/ui are all DECIDED (Section 2.3), not MANDATED. Each has rationale. |
+| **Auth/session incompatibility (OWNER §14)** | **0** — Better Auth + Drizzle adapter + database sessions are compatible (TD-003 revised); no Auth.js/bcrypt remnants; no bcrypt/bcryptjs dependency (TD-009 revised). |
+| **Auth choice deferred to S10 (OWNER §14)** | **0** — TD-003 revised is DECIDED in S6. S10 implements, does not re-choose. |
+| **Tiptap rendering contradiction (OWNER §14)** | **0** — TD-013 revised uses Tiptap React server-side renderer (no HTML string roundtrip, no dangerouslySetInnerHTML with user content). The contract is internally consistent. |
 | Critical NFRs without realization | 0 (NFR-001 perf, NFR-010/011/012/013 security, NFR-030 accessibility, NFR-040 French, NFR-050 audit, NFR-060 integrity — all realized, Section 24.5) |
-| Critical boundaries without verification | 0 (auth boundary, public visibility boundary, secret boundary, Preview/Production boundary — all have verification in Section 24) |
+| Critical boundaries without verification | 0 (auth boundary, public visibility boundary, secret boundary, Preview/Production boundary, auth-vs-authorization separation — all have verification in Section 24 and TD-019/Section 13) |
 | Major decisions without rationale | 0 (every TD-NNN has rationale linked to requirement or OWNER decision) |
+| **Separation auth/authorization clear (OWNER §14)** | **YES** — Better Auth authenticates; `can()` / `requireCapability()` authorizes independently (Section 13.2). |
+| **Fantomas still conformant (OWNER §14)** | **YES** — capability matrix Section 13.3 satisfies AISE §21 (Fantomas inherits ADMIN capabilities + extra; ADMIN does not inherit Fantomas-only). |
+| **Drizzle/Neon coherent (OWNER §14)** | **YES** — TD-004 (Drizzle) + TD-030 (@neondatabase/serverless, matched to V1's short transactions). |
+| **Production/Preview coherent (OWNER §14)** | **YES** — TD-019 + Section 20 strict isolation + target verification. |
 
-**Verdict: QUALITY GATE PASS. S6 is ready for OWNER_REVIEW.**
+**Verdict: QUALITY GATE PASS. S6 is READY FOR OWNER APPROVAL.**
 
-### 29.2 Owner approval summary
+### 29.2 Owner approval summary (revised)
 
 When presenting to OWNER for approval, S6 summarizes:
 
 - **Architecture**: Modular monolith Next.js full-stack (TD-001). Single app, single DB, no microservices, no cache, no external API.
-- **Major stack choices**: Drizzle ORM (TD-004), Auth.js + bcrypt (TD-003, TD-009), Tiptap JSON (TD-013), Tailwind + shadcn/ui (TD-010, TD-011), pnpm (TD-017), Vitest + RTL + Playwright (TD-024).
-- **Data design**: 3 tables (offers, users, sessions) per Section 9. Free text for Entreprises/Secteurs/Catégories (TD-021). UUID ids (TD-015). 4-state enum for offer status.
+- **Major stack choices**: Drizzle ORM (TD-004, DECIDED); Better Auth (TD-003 revised, DECIDED — replaces Auth.js); scrypt via Better Auth default (TD-009 revised — replaces bcrypt); Tiptap JSON + React server-side renderer (TD-013 revised — no HTML string roundtrip); Tailwind + shadcn/ui (TD-010, TD-011, both DECIDED — reclassified from MANDATED); pnpm (TD-017, DECIDED); Zod (TD-008, DECIDED); Vitest + RTL + Playwright (TD-024); @neondatabase/serverless driver (TD-030, added).
+- **Data design**: offers table (Section 9.3.1) + Better Auth standard tables (user, session, account, verification) with V1 `role` extension on user (Section 9.3.2 — Better Auth manages these tables; S6 documents the expected shape). Free text for Entreprises/Secteurs/Catégories (TD-021). UUID ids (TD-015). 4-state enum for offer status.
 - **Integration model**: No external integration in V1 (INT-001).
-- **Auth/security**: Auth.js Credentials + bcrypt + database session; Fantomas via idempotent seed + env var; can() capability abstraction per AISE §21.
-- **Deployment**: Vercel Production + Preview with Neon main + preview branches (TD-019). No Docker/K8s.
-- **Testing**: Vitest (unit + component + integration with real DB) + Playwright (E2E critical journey per OWNER S6 §21).
-- **Critical NFR realization**: NFR-001 (Server Components + partial index + ISR), NFR-010/011/012/013 (auth + secret handling), NFR-030 (semantic HTML + axe-core), NFR-040 (French only), NFR-050 (timestamps), NFR-060 (status transitions preserve content).
-- **Material risks**: 8 risks identified (Section 25) — all MITIGATE/ACCEPT/MONITOR with concrete responses.
-- **Trade-offs**: Prisma vs Drizzle (chose Drizzle); Better Auth vs Auth.js (chose Auth.js); TanStack Query vs Server Actions (chose Server Actions); Tiptap vs Markdown (chose Tiptap); URL strategy (chose /offres/{id} over slug-based).
-- **Blocking questions**: 0.
-- **ADR candidates**: 13 (Section 27).
+- **Auth/security**: Better Auth + database sessions + sign-up disabled; Fantomas via idempotent bootstrap script + env var (TD-020 revised — separate from demo seed); `can()` / `requireCapability()` capability abstraction per AISE §21 (Section 13) — INDEPENDENT of the auth library (OWNER §2 separation of concerns); in-memory login rate limiting (TD-031, added).
+- **Deployment**: Vercel Production + Preview with Neon main + preview branches (TD-019, strict isolation + target verification per Section 20.4). No Docker/K8s.
+- **Migration doctrine (TD-018 revised)**: schema source-controlled; migrations generated and reviewed; applied controlled (never `drizzle-kit push` against Production); forward corrective migrations preferred over down migrations; seed vs bootstrap distinction (OWNER §12).
+- **Testing**: Vitest (unit + component + integration with REAL DB, no DB mocking) + Playwright (E2E critical journey per OWNER S6 §21).
+- **Critical NFR realization**: NFR-001 (Server Components + partial index + ISR), NFR-010/011/012/013 (Better Auth + secret handling), NFR-030 (semantic HTML + axe-core), NFR-040 (French only), NFR-050 (timestamps), NFR-060 (status transitions preserve content).
+- **Material risks**: 8 risks identified (Section 25) — all MITIGATE/ACCEPT/MONITOR with concrete responses. The Fantomas credential mishandling risk and Tiptap rendering risk are mitigated by TD-020 (env var + idempotent bootstrap, no plaintext in repo) and TD-013 revised (React renderer, no HTML string).
+- **Trade-offs**: Prisma vs Drizzle (chose Drizzle); Better Auth vs Auth.js (chose Better Auth per OWNER §2); TanStack Query vs Server Actions (chose Server Actions); Tiptap vs Markdown (chose Tiptap); URL strategy (chose /offres/{id} over slug-based); bcrypt vs scrypt (chose scrypt via Better Auth default); pg_trgm vs none (chose none in V1 initial — optional optimization); Neon serverless vs TCP driver (chose serverless — matched to V1's short transactions).
+- **Status distribution (revised)**: 31 TDs total — 28 DECIDED + 1 MANDATED (PostgreSQL/Neon, TD-002) + 0 PROVISIONAL + 0 OPEN + 0 DEFERRED status. Note: TD-002 is the only MANDATED TD (PostgreSQL/Neon from Charter §10); all other "preferences" (Zod, Tailwind, pnpm, Better Auth, Drizzle, etc.) are DECIDED with rationale (Section 2.3).
+- **Open questions**: 0 blocking + 0 non-blocking (all 5 previously-open items CLOSED in S6 per OWNER §7).
+- **ADR candidates**: 15 (Section 27 — added TD-030 and TD-031).
 
 S6 is ready for OWNER approval. S7 has NOT started.
