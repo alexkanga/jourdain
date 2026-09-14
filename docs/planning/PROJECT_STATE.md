@@ -8,27 +8,30 @@ control plane) to understand where the project stands.
 ## Current phase
 
 PROJECT:                JOURDAIN EMPLOI
-AISE PHASE:             S4 — PROJECT DISCOVERY / CHARTER
-STATUS:                 CLOSED PASS — CHARTER APPROVED
+AISE PHASE:             S5 — PRODUCT REQUIREMENTS
+STATUS:                 CLOSED PASS — PRODUCT REQUIREMENTS APPROVED
 CHARTER APPROVED:       YES
 CHARTER PATH:           docs/planning/PROJECT_CHARTER.md
 CHARTER APPROVAL DATE:  2026-09-13
+PRODUCT REQUIREMENTS APPROVED: YES
+PRODUCT REQUIREMENTS PATH: docs/product/PRODUCT_REQUIREMENTS.md
+PRODUCT REQUIREMENTS APPROVAL DATE: 2026-09-14
 CANONICAL BRANCH:       main
-CANONICAL HEAD:         fa377c1feba5a111c07e0f40d094245fdadc727d
+CANONICAL HEAD:         9ec4a08b467a4a3909fa9bc0a72bf02e4c682418
 REMOTE:                 configured (origin → git@github.com-aise-alexkanga-jourdain:alexkanga/jourdain.git)
-REMOTE HEAD:            fa377c1feba5a111c07e0f40d094245fdadc727d
+REMOTE HEAD:            9ec4a08b467a4a3909fa9bc0a72bf02e4c682418
 LOCAL = REMOTE:         YES
 AISE SOURCE COMMIT:     2991df51c1fa692f892452c361081c626f028cd0
-COMPLETED COMPONENTS:   S0, S1, S2, S3, S4 installed and canonical
+COMPLETED COMPONENTS:   S0, S1, S2, S3, S4, S5 installed and canonical
 PRODUCT DISCOVERY:      CLOSED PASS — CHARTER APPROVED (S4)
-PRODUCT REQUIREMENTS:   NOT STARTED (S5)
+PRODUCT REQUIREMENTS:   CLOSED PASS — PRODUCT REQUIREMENTS APPROVED (S5)
 TECHNICAL SPECIFICATION: NOT STARTED (S6)
 PROJECT MANIFEST/ADR:   NOT STARTED (S7)
 ROADMAP:                NOT STARTED (S8)
 IMPLEMENTATION:         NOT STARTED (S10)
-DEFERRED DECISIONS:     D1 (GDPR details — S6), D2 (migration scope — only if needed), D3 (data residency — S6). All explicitly non-blocking for S5 or V1.
+DEFERRED DECISIONS:     Charter-level: D1 (GDPR details — S6), D2 (migration scope — only if needed), D3 (data residency — S6). S5-level: DR-010 (id format), DR-020/021 (validation formats), DR-030/040 (full audit log), DR-050 (admin UI), DR-051 (SUPER_ADMIN role), DR-160 (GDPR), DR-170 (data residency). All explicitly non-blocking for S6 or V1.
 NEXT AUTHORIZED:        NONE until OWNER GO
-NEXT RECOMMENDED:       S5 — Product Requirements / Cahier des Charges
+NEXT RECOMMENDED:       S6 — Technical Specification
 
 ## What exists
 
@@ -38,7 +41,7 @@ NEXT RECOMMENDED:       S5 — Product Requirements / Cahier des Charges
 - This project state file: `docs/planning/PROJECT_STATE.md`.
 - Minimal README: `README.md`.
 
-## What does NOT exist (intentional, per S3 and S4 boundaries)
+## What does NOT exist (intentional, per S3 / S4 / S5 boundaries)
 
 - No application code.
 - No Next.js application scaffolded.
@@ -47,13 +50,12 @@ NEXT RECOMMENDED:       S5 — Product Requirements / Cahier des Charges
 - No authentication provider configured.
 - No CI/CD pipeline.
 - No scheduled work, cron, or background automation (S0 §23 default).
-- No product requirements document (S5 — next recommended stage).
-- No technical specification (S6).
+- No technical specification (S6 — next recommended stage).
 - No project manifest / ADRs (S7).
 - No roadmap (S8).
 - No implementation (S10).
 
-## What exists now (after S4 closure)
+## What exists now (after S5 closure)
 
 - AISE governance control plane: S0–S14 + R1–R7, vendored canonical
   snapshot from source commit 2991df51c1fa692f892452c361081c626f028cd0.
@@ -63,6 +65,11 @@ NEXT RECOMMENDED:       S5 — Product Requirements / Cahier des Charges
 - **OWNER-APPROVED PROJECT CHARTER**: `docs/planning/PROJECT_CHARTER.md`
   (frozen at canonical commit `fa377c1feba5a111c07e0f40d094245fdadc727d`,
   approved by OWNER on 2026-09-13).
+- **OWNER-APPROVED PRODUCT REQUIREMENTS**: `docs/product/PRODUCT_REQUIREMENTS.md`
+  (frozen at canonical commit `9ec4a08b467a4a3909fa9bc0a72bf02e4c682418`,
+  approved by OWNER on 2026-09-14).
+  Contains 65 CONFIRMED requirements (30 FR + 21 BR + 4 PERM + 1 INT + 9 NFR),
+  0 ASSUMPTION, 0 OPEN, 9 DEFERRED decisions (genuine future), 30 OUT OF SCOPE V1 items.
 
 ## OWNER-provided inputs (recorded as-is, evidence for S4/S5/S6)
 
@@ -203,8 +210,8 @@ Architectural constraint (OWNER-stated):
 
 ## Stop contract
 
-S4 is CLOSED / PASS — CHARTER APPROVED. S5 has NOT started. S5 begins
-only after explicit OWNER GO.
+S5 is CLOSED / PASS — PRODUCT REQUIREMENTS APPROVED. S6 has NOT
+started. S6 begins only after explicit OWNER GO.
 
-NEXT RECOMMENDED COMPONENT: S5 — Product Requirements / Cahier des Charges
+NEXT RECOMMENDED COMPONENT: S6 — Technical Specification
 NEXT ACTION: OWNER GO REQUIRED

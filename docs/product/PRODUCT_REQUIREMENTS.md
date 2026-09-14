@@ -1,12 +1,13 @@
 # PRODUCT REQUIREMENTS — JOURDAIN EMPLOI V1
 
 **Document type:** AISE S5 — Product Requirements / Cahier des Charges fonctionnel
-**Status:** FINAL DRAFT — READY FOR OWNER APPROVAL
-**Date:** 2026-09-14 (initial draft), 2026-09-14 (revised after OWNER revision decisions §1–§23)
+**Status:** OWNER APPROVED — S5 CLOSED / PASS
+**Date:** 2026-09-14 (initial draft), 2026-09-14 (revised after OWNER revision decisions §1–§23), 2026-09-14 (OWNER APPROVED)
 **Project:** JOURDAIN EMPLOI V1
 **Canonical repository:** `github.com/alexkanga/jourdain`
 **Canonical branch:** `main`
 **Initial draft HEAD:** `25c72046a0b9fbb7261d41d95cdcaa5333f61e07`
+**Revised draft HEAD (pre-approval):** `9ec4a08b467a4a3909fa9bc0a72bf02e4c682418`
 **Charter-approved HEAD (source of truth):** `fa377c1feba5a111c07e0f40d094245fdadc727d`
 
 ---
@@ -17,10 +18,12 @@
 |---|---|
 | Project | JOURDAIN EMPLOI |
 | AISE Stage | S5 — Product Requirements |
-| Status | FINAL DRAFT — READY FOR OWNER APPROVAL |
+| Status | OWNER APPROVED — S5 CLOSED / PASS |
 | Source Charter | `docs/planning/PROJECT_CHARTER.md` — OWNER APPROVED 2026-09-13 at `fa377c1` |
 | Charter-approved canonical HEAD | `fa377c1feba5a111c07e0f40d094245fdadc727d` |
 | Initial S5 draft HEAD | `25c72046a0b9fbb7261d41d95cdcaa5333f61e07` |
+| Revised S5 draft HEAD (pre-approval) | `9ec4a08b467a4a3909fa9bc0a72bf02e4c682418` |
+| S5 OWNER approval date | 2026-09-14 |
 | S5 revision | Applies OWNER decisions §1–§23 to resolve all ASSUMPTIONS and OPEN QUESTIONS, reclassify DEFERRED items, and correct the date model |
 
 This document is governed by AISE protocol S5 (`docs/engineering/AISE_PRODUCT_REQUIREMENTS.md`). It defines **what the product must do** — not how (S6) and not why (S4).
@@ -1461,18 +1464,56 @@ S5 identifies the following technical decisions to be made in S6. S5 does NOT de
 
 ## 20. Approval / Baseline Status
 
+**APPROVED BY OWNER on 2026-09-14.**
+
+OWNER has explicitly approved this baseline at canonical commit `9ec4a08b467a4a3909fa9bc0a72bf02e4c682418` with the following acknowledgment:
+
+> J'approuve explicitement le baseline fonctionnel S5 de JOURDAIN EMPLOI : docs/product/PRODUCT_REQUIREMENTS.md — Commit canonique approuvé : 9ec4a08b467a4a3909fa9bc0a72bf02e4c682418 — Le cahier des charges fonctionnel S5 est APPROUVÉ.
+
+OWNER-confirmed functional decisions (excerpt of the approval):
+
+- 4 statuses V1: DRAFT, PUBLISHED, SUSPENDED, ARCHIVED — ARCHIVED terminal in V1
+- Save ≠ publish; publication is an explicit ADMIN action
+- A modified PUBLISHED offer remains PUBLISHED unless explicit suspend/archive
+- No physical deletion in V1; no automatic expiration; no republication from ARCHIVED in V1
+- Required fields: title, description; all other fields optional
+- Date model: source_publication_date, application_deadline, published_at, created_at, updated_at (distinct); published_at is JOURDAIN-generated and serves public sort; expiration_date does not exist in V1
+- Root URL may directly show the published offers list; public sort by published_at descending
+- Public simple search = SHOULD; Admin status filter = required; Admin simple search = SHOULD
+- No CRUD modules for Entreprises/Secteurs/Catégories in V1
+- No Apply button, no internal application workflow, no Duplicate action, no Preview mode, no candidate account, no sharing, no multilingual, no public API, no multi-tenant, no complex RBAC
+- Fantomas remains a distinct system principal from ordinary ADMIN per the previously approved contract
+
+OWNER-accepted DEFERRED DECISIONS (genuinely future, non-blocking for S5 closure):
+
+- DR-010 — id format (S6)
+- DR-020 / DR-021 — email/URL validation formats (S6/S10)
+- DR-030 / DR-040 — full audit log (future product decision)
+- DR-050 — ADMIN account management UI (future product decision)
+- DR-051 — formal SUPER_ADMIN role (future product decision)
+- DR-160 — GDPR detailed constraints (Charter D1 — S6)
+- DR-170 — data residency (Charter D3 — S6)
+
+Per AISE S5 §23 and §24, the baseline is now FROZEN as the canonical intended state. Any future modification requires a material change record and OWNER approval.
+
+Per AISE S5 §29, S5 transitions PROJECT_STATE to:
+- AISE PHASE: S5 — CLOSED / PASS
+- PRODUCT REQUIREMENTS: APPROVED
+- TECHNICAL SPECIFICATION: NOT STARTED (S6)
+- NEXT RECOMMENDED: S6 — Technical Specification
+
+S6 begins only after explicit OWNER GO.
+
 | Field | Value |
 |---|---|
-| Document status | FINAL DRAFT — READY FOR OWNER APPROVAL |
+| Document status | OWNER APPROVED — S5 CLOSED / PASS |
 | Charter reference | `docs/planning/PROJECT_CHARTER.md` at `fa377c1` |
 | Charter approval date | 2026-09-13 |
 | S5 initial draft date | 2026-09-14 |
 | S5 revision date | 2026-09-14 (after OWNER revision decisions §1–§23) |
-| S5 OWNER approval | PENDING |
-| S5 closure (S5 CLOSED / PASS) | PENDING — requires OWNER approval |
+| S5 OWNER approval date | 2026-09-14 |
+| Approved baseline commit | `9ec4a08b467a4a3909fa9bc0a72bf02e4c682418` |
 | Next recommended component | S6 — Technical Specification |
-
-Per AISE S5 §25, the baseline is NOT valid until OWNER explicitly approves it. OWNER's absence of objection is NOT approval — explicit acknowledgment is required.
 
 ---
 
