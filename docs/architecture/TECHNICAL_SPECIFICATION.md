@@ -247,19 +247,35 @@ REQUIREMENTS:   FR-001 (login), FR-002 (logout), FR-003 (back-office denied to p
                 via Better Auth supported mechanism, no manual hash INSERT)
 OPTIONS:        Better Auth | Auth.js (NextAuth v5) | Lightweight custom session-based auth
 SELECTED:       Better Auth, with the following explicit configuration:
-                - emailAndPassword authenticator (password-based authentication)
+                - emailAndPassword: { enabled: true, disableSignUp: true } —
+                  password-based authentication with PUBLIC SIGN-UP DISABLED (Better
+                  Auth documented syntax; NOT the old `emailAndPassword.signUp.disabled`
+                  form which is non-standard)
                 - Username plugin (better-auth/plugins/username) — username is the
                   DAILY LOGIN IDENTIFIER of JOURDAIN EMPLOI (NOT the email). The login
                   form asks for username + password. Fantomas logs in with username
                   "Fantomas". ADMIN logs in with their assigned username.
+                - Admin plugin (better-auth/plugins/admin) — explicitly configured
+                  server-side. Used ONLY as the technical mechanism that enables
+                  `auth.api.createUser()` for the bootstrap script to create system
+                  principals without a public sign-up flow. The Admin plugin is NOT
+                  the business authorization system; it does NOT define JOURDAIN
+                  EMPLOI capabilities. No user-management UI is added to V1 — the
+                  Admin plugin is server-side only, invoked by the bootstrap script.
                 - Drizzle adapter on PostgreSQL Neon (drizzle-orm/neon-http — TD-030)
                 - Database session strategy (sessions in the `session` table managed
                   by Better Auth's Drizzle adapter)
-                - Public sign-up DISABLED (`emailAndPassword.signUp.disabled = true` or
-                  equivalent; no /sign-up endpoint, no public registration)
-                - rate limiter enabled with database storage on Neon (TD-031 finalized)
-                - user schema extended with a `role` column (enum: 'admin' | 'fantomas')
-                  via Better Auth's `user.model` additional fields config
+                - Rate limiter enabled with database storage on Neon (TD-031 finalized)
+                - User schema extended with TWO additional fields via Better Auth's
+                  `user.model` config:
+                  1. `principalType` (enum: 'ADMIN' | 'FANTOMAS') — THIS IS THE
+                     JOURDAIN EMPLOI BUSINESS PRINCIPAL FIELD. It is the source of
+                     truth for business authorization via can()/requireCapability()
+                     (Section 13). It is independent of Better Auth's internal
+                     permissions.
+                  2. `role` (Better Auth Admin plugin internal) — reserved for
+                     Better Auth Admin plugin mechanics if needed. JOURDAIN EMPLOI
+                     business authorization does NOT read this field.
                 - email field: PRESENT in the user table (Better Auth requires it
                   internally) but NOT used as the daily login identifier. The email
                   may be a synthetic value for system principals (e.g.,
@@ -275,7 +291,10 @@ SELECTED:       Better Auth, with the following explicit configuration:
                 (db/bootstrap/bootstrap.ts, per TD-020) creates the initial system
                 principals (Fantomas + initial ADMIN) via Better Auth's SUPPORTED
                 server-side user creation API: `auth.api.createUser({ body: {
-                username, password, email, role, ... } })`.
+                username, password, email, principalType, ... } })`.
+                - `auth.api.createUser()` is authorized because the Admin plugin is
+                  explicitly configured (see above). The Admin plugin enables the
+                  server-side createUser endpoint.
                 - This is the SUPPORTED Better Auth mechanism for creating users
                   server-side without a public sign-up flow. Better Auth handles
                   password hashing (scrypt by default — TD-009), creates the user
@@ -335,16 +354,23 @@ CONSEQUENCES:   - Better Auth Drizzle adapter generates the auth tables (user,
                 session, account, verification) + the rate-limit table (TD-031) —
                 S6 documents the expected shape (Section 9.3.2) but does NOT redefine
                 these tables.
-                - The `user` table is extended with `username` (Username plugin) and
-                `role` (V1 extension) columns.
+                - The `user` table is extended with `username` (Username plugin),
+                `principalType` (V1 business principal field — enum: 'ADMIN' | 'FANTOMAS'),
+                and `role` (Better Auth Admin plugin internal — reserved, NOT used
+                for JOURDAIN EMPLOI business authorization).
                 - The login form asks for username + password (NOT email).
-                - Public sign-up is disabled; users are created ONLY via the bootstrap
-                script (TD-020) calling `auth.api.createUser()`.
+                - Public sign-up is disabled via `emailAndPassword: { enabled: true,
+                disableSignUp: true }`; users are created ONLY via the bootstrap
+                script (TD-020) calling `auth.api.createUser()` (authorized by the
+                Admin plugin).
                 - No bcrypt dependency (Better Auth uses scrypt by default). No
                 bcryptjs fallback needed.
                 - `can()` / `requireCapability()` lives in
                 lib/server/auth/authorization.ts and is the AUTHORITY for business
-                capabilities — independent of Better Auth.
+                capabilities — independent of Better Auth. It reads `principalType`
+                (NOT `role`) to determine capabilities.
+                - The Admin plugin is server-side only; no user-management UI is
+                exposed in V1.
 ADR CANDIDATE:  YES
 STATUS:         DECIDED
 ```
@@ -1437,7 +1463,7 @@ Client components (`components/*`) may only import from `components/ui`, `lib/cl
 | Neon driver | drizzle-orm/neon-http (HTTP-based, no interactive transactions; underlying: @neondatabase/serverless) | TD-030 (finalized) | DECIDED |
 | ORM / Query | Drizzle ORM + Drizzle Kit | TD-004 | DECIDED |
 | Validation | Zod | TD-008 | DECIDED |
-| Auth | Better Auth (Drizzle adapter, Username plugin + emailAndPassword, database sessions, sign-up disabled, rate limiter with database storage) | TD-003 (finalized) | DECIDED |
+| Auth | Better Auth (Drizzle adapter, Username plugin + Admin plugin + emailAndPassword { disableSignUp: true }, database sessions, rate limiter with database storage; principalType field for business authorization) | TD-003 (finalized) | DECIDED |
 | Password hashing | Better Auth default (scrypt, Node.js built-in) | TD-009 (revised) | DECIDED |
 | Rate limiting | Better Auth integrated rate limiter + database storage on Neon (NOT in-memory, NOT Redis) | TD-031 (finalized) | DECIDED |
 | Authorization abstraction | can() / requireCapability() (independent of auth library) | TD-003 + Section 13 | DECIDED |
@@ -1620,9 +1646,10 @@ Better Auth's Drizzle adapter generates the following tables (the exact column t
 | image | text | Better Auth | Optional; NULL in V1 (no avatars) |
 | createdAt | timestamptz | Better Auth | |
 | updatedAt | timestamptz | Better Auth | |
-| **role** | user_role (enum: 'admin' \| 'fantomas') | **V1 extension** | Added via Better Auth's `user.model` additional fields config. Default 'admin'. Fantomas gets 'fantomas'. |
+| **principalType** | principal_type (enum: 'ADMIN' \| 'FANTOMAS') | **V1 business principal field** | THE JOURDAIN EMPLOI business principal identifier. Source of truth for `can()` / `requireCapability()` (Section 13). Independent of Better Auth's internal permissions. Default 'ADMIN'. Fantomas gets 'FANTOMAS'. |
+| **role** | text (or Better Auth Admin plugin enum) | **Better Auth Admin plugin internal** | Reserved for Better Auth Admin plugin mechanics. JOURDAIN EMPLOI business authorization does NOT read this field. May be NULL or set by the Admin plugin internally. |
 
-The `role` column is the ONLY V1 extension to Better Auth's standard user table. It is added via Better Auth's configuration (not via a custom column bypass), so Better Auth is aware of it and can include it in session data.
+The `principalType` column is the V1 BUSINESS PRINCIPAL extension to Better Auth's standard user table. The `role` column is reserved for Better Auth Admin plugin internals and is NOT used for JOURDAIN EMPLOI business authorization. Both are added via Better Auth's configuration (not via a custom column bypass), so Better Auth is aware of them and can include them in session data.
 
 **`session` table** (Better Auth standard):
 
@@ -1655,19 +1682,21 @@ The `role` column is the ONLY V1 extension to Better Auth's standard user table.
 | expiresAt | timestamptz | Better Auth | |
 | ... | ... | Better Auth | (other Better Auth standard columns) |
 
-**V1 does NOT redefine these tables.** Better Auth's Drizzle adapter generates them via `drizzle-kit generate` based on the Better Auth config. The migration files are versioned (TD-018). The only V1 customization is the `role` column on `user`, added via Better Auth's config so the adapter includes it in the schema generation. Additionally, Better Auth's rate limiter with database storage (TD-031 finalized) generates a rate-limit table (e.g., `rate_limit` or similar — the exact name follows Better Auth's conventions) via the same Drizzle schema generation. This rate-limit table is part of the auth schema and is integrated into the versioned migrations like the other auth tables.
+**V1 does NOT redefine these tables.** Better Auth's Drizzle adapter generates them via `drizzle-kit generate` based on the Better Auth config. The migration files are versioned (TD-018). The V1 customizations are the `principalType` column (business principal) and the `role` column (Admin plugin internal) on `user`, both added via Better Auth's config so the adapter includes them in the schema generation. Additionally, Better Auth's rate limiter with database storage (TD-031 finalized) generates a rate-limit table (e.g., `rate_limit` or similar — the exact name follows Better Auth's conventions) via the same Drizzle schema generation. This rate-limit table is part of the auth schema and is integrated into the versioned migrations like the other auth tables.
 
 ```sql
-CREATE TYPE user_role AS ENUM ('admin', 'fantomas');
--- The user_role enum is the only V1-specific schema addition to the Better Auth
--- standard schema. It is added by the Drizzle schema definition referenced by the
+CREATE TYPE principal_type AS ENUM ('ADMIN', 'FANTOMAS');
+-- The principal_type enum is the V1-specific schema addition for business
+-- authorization. It is added by the Drizzle schema definition referenced by the
 -- Better Auth config; Better Auth's adapter then generates the user table with
--- the role column.
+-- the principalType column.
+-- The `role` column (Better Auth Admin plugin internal) is a separate field,
+-- NOT governed by this enum and NOT used by can()/requireCapability().
 ```
 
 **Constraints:**
 - `UNIQUE (user.username)` — username is unique (V1 login identifier per FR-001).
-- `CHECK (role IN ('admin', 'fantomas'))` — enforced by the enum.
+- `CHECK (principalType IN ('ADMIN', 'FANTOMAS'))` — enforced by the principal_type enum.
 - Better Auth's standard constraints on session, account, verification (foreign keys, uniqueness) are applied by the adapter.
 
 **Indexes:**
@@ -1745,16 +1774,17 @@ Local database (`user` table managed by Better Auth Drizzle adapter, Section 9.3
 
 ### 12.2 Credential and session model
 
-- **Auth library**: Better Auth (TD-003 finalized), with Drizzle adapter, Username plugin + emailAndPassword authenticator, database sessions, public sign-up disabled, rate limiter with database storage.
+- **Auth library**: Better Auth (TD-003 finalized), with Drizzle adapter, Username plugin + Admin plugin + emailAndPassword, database sessions, public sign-up disabled via `disableSignUp: true`, rate limiter with database storage.
 - **Daily login identifier**: username (NOT email). The login form asks for username + password. Fantomas logs in with username "Fantomas". ADMIN logs in with their assigned username. The email field exists in the user table (Better Auth requires it internally) but is NOT used as the daily login identifier; for system principals it is a synthetic value (e.g., "fantomas@jourdain.local").
 - **Username uniqueness**: enforced by the Username plugin (unique constraint on the `username` column).
 - **Username immutability for system principals**: usernames created by the bootstrap script are immutable in V1 (no "change username" feature in V1; the admin UI does not expose username editing). A V2 admin UI may add username editing with Fantomas authorization (DR-050).
+- **Business principal field**: `principalType` (enum: 'ADMIN' | 'FANTOMAS') — the JOURDAIN EMPLOI business principal identifier. Source of truth for `can()` / `requireCapability()` (Section 13). INDEPENDENT of Better Auth's internal `role` field (which is reserved for the Admin plugin).
 - **Credentials**: username + password. The password is hashed by Better Auth using scrypt (Node.js built-in crypto.scrypt) — per TD-009 revised. The hash is stored in the `account` table (Better Auth's standard credential-account record), NOT in a custom column, NOT manually written by the bootstrap script.
 - **Session strategy**: database (Better Auth persists sessions in the `session` table via its Drizzle adapter). Sessions are NOT JWT-based in V1 — database sessions are preferred for stateful admin back-office (immediate invalidation on logout, auditable).
 - **Session cookie**: Better Auth's session cookie (`better-auth.session_token` or similar — the exact name is set by Better Auth config), httpOnly, secure (production), SameSite=Lax.
 - **Session lifetime**: 7 days (Better Auth default; can be tuned via Better Auth config).
 - **Session expiry pruning**: lazy — Better Auth checks the `expiresAt` column on access and deletes expired sessions. No cron job (S0 §23).
-- **Sign-up disabled**: Better Auth's `signUp` endpoint is disabled in the config (`emailAndPassword.signUp.disabled = true` or equivalent). No public registration. Users are created ONLY via the bootstrap script (TD-020) calling `auth.api.createUser()`.
+- **Sign-up disabled**: Better Auth config uses the documented syntax `emailAndPassword: { enabled: true, disableSignUp: true }`. No public registration. Users are created ONLY via the bootstrap script (TD-020) calling `auth.api.createUser()` (authorized by the explicitly configured Admin plugin).
 - **No public "username availability" endpoint**: no information leak about existing usernames. Brute-force protection is handled by the rate limiter, not by revealing existing usernames.
 
 ### 12.3 Login flow (FR-001)
@@ -1802,25 +1832,27 @@ After first production deploy:
     → db/bootstrap/bootstrap.ts:
       → Reads FANTOMAS_INITIAL_PASSWORD env var
       → If no user with username='Fantomas':
-        → Calls Better Auth's SUPPORTED server-side user creation API:
+        → Calls Better Auth's SUPPORTED server-side user creation API
+          (authorized by the explicitly configured Admin plugin):
             auth.api.createUser({ body: {
               username: 'Fantomas',
               password: FANTOMAS_INITIAL_PASSWORD,
               email: 'fantomas@jourdain.local',  // synthetic; not used for daily login
-              role: 'fantomas',
+              principalType: 'FANTOMAS',  // V1 business principal field
               // ...other Better Auth required fields
             } })
         → Better Auth handles: password hashing (scrypt — TD-009), user record
-          creation in the `user` table, credential-account record creation in
-          the `account` table (providerId='credential'). The bootstrap script
-          does NOT manually INSERT password hashes, does NOT bypass Better
-          Auth, does NOT write to the DB directly.
-        → Log "Fantomas principal created"
+          creation in the `user` table (including the principalType field),
+          credential-account record creation in the `account` table
+          (providerId='credential'). The bootstrap script does NOT manually
+          INSERT password hashes, does NOT bypass Better Auth, does NOT write
+          to the DB directly.
+        → Log "Fantomas principal created (principalType=FANTOMAS)"
       → Else: log "Fantomas already exists — not recreated (no overwrite)"
       → For each admin in db/bootstrap/config.ts (username + env-var name for password):
         → If no user with that username:
           → Calls auth.api.createUser with the admin's username + env-var password
-            + synthetic email + role='admin'
+            + synthetic email + principalType='ADMIN'
       → Log summary
 ```
 
@@ -1842,14 +1874,14 @@ OUT OF SCOPE V1 (DR-050). For V1, password reset for an ADMIN is done by Fantoma
 
 ### 13.1 Principal model
 
-| Principal | role enum value | Capabilities |
+| Principal | principalType value | Capabilities |
 |---|---|---|
-| ADMIN | `'admin'` | All offer lifecycle operations (PERM-002); no Fantomas-specific capabilities |
-| FANTOMAS | `'fantomas'` | All ADMIN capabilities + Fantomas-specific bootstrap / recovery / break-glass (AISE §14, §21) |
+| ADMIN | `'ADMIN'` | All offer lifecycle operations (PERM-002); no Fantomas-specific capabilities |
+| FANTOMAS | `'FANTOMAS'` | All ADMIN capabilities + Fantomas-specific bootstrap / recovery / break-glass (AISE §14, §21) |
 
 ### 13.2 Authorization abstraction (revised per OWNER §2, §3)
 
-The authorization layer is INDEPENDENT of the auth library (OWNER §2). Better Auth authenticates and provides the session; our `can()` / `requireCapability()` layer authorizes. The layer reads only the `role` field from the session — it does not import Better Auth types or call Better Auth functions for capability checks.
+The authorization layer is INDEPENDENT of the auth library (OWNER §2). Better Auth authenticates and provides the session; our `can()` / `requireCapability()` layer authorizes. The layer reads only the `principalType` field from the session (NOT Better Auth's internal `role` field) — it does not import Better Auth types or call Better Auth functions for capability checks.
 
 S6 defines a single reusable helper module in `lib/server/auth/authorization.ts`:
 
@@ -1858,7 +1890,7 @@ S6 defines a single reusable helper module in `lib/server/auth/authorization.ts`
 type Principal = {
   id: string;
   username: string;
-  role: 'admin' | 'fantomas';
+  principalType: 'ADMIN' | 'FANTOMAS';
 };
 
 type Capability =
@@ -1870,8 +1902,9 @@ type Capability =
 
 // Returns the current principal or null if unauthenticated.
 // Internally calls Better Auth's getSession() and maps the result to our
-// Principal type (reading the role field). The mapping is the ONLY place
-// where Better Auth is imported in the authorization layer.
+// Principal type (reading the principalType field, NOT Better Auth's role).
+// The mapping is the ONLY place where Better Auth is imported in the
+// authorization layer.
 async function getPrincipal(): Promise<Principal | null>;
 
 // Returns the principal if authenticated AND having the given capability.
@@ -1879,6 +1912,7 @@ async function getPrincipal(): Promise<Principal | null>;
 async function requireCapability(capability: Capability): Promise<Principal>;
 
 // Returns true if the principal has a given capability. Pure function.
+// Reads principalType (NOT role).
 function can(principal: Principal, capability: Capability): boolean;
 ```
 
@@ -1913,7 +1947,7 @@ const FANTOMAS_EXTRA_CAPABILITIES: Capability[] = [
 ];
 
 function can(principal: Principal, capability: Capability): boolean {
-  if (principal.role === 'fantomas') {
+  if (principal.principalType === 'FANTOMAS') {
     return [...ADMIN_CAPABILITIES, ...FANTOMAS_EXTRA_CAPABILITIES].includes(capability);
   }
   return ADMIN_CAPABILITIES.includes(capability);
@@ -1923,7 +1957,7 @@ function can(principal: Principal, capability: Capability): boolean {
 This satisfies AISE §21 exactly:
 - Every ADMIN capability is also authorized to Fantomas (Fantomas inherits ADMIN_CAPABILITIES).
 - Fantomas has additional capabilities (FANTOMAS_EXTRA_CAPABILITIES).
-- ADMIN does NOT inherit Fantomas-only capabilities (the `if role === 'fantomas'` branch is the only path to FANTOMAS_EXTRA_CAPABILITIES).
+- ADMIN does NOT inherit Fantomas-only capabilities (the `if principalType === 'FANTOMAS'` branch is the only path to FANTOMAS_EXTRA_CAPABILITIES).
 
 **Future SUPER_ADMIN (DR-051)**: if a future version adds a formal SUPER_ADMIN role, the matrix extends: SUPER_ADMIN_CAPABILITIES = ADMIN_CAPABILITIES (or a superset); FANTOMAS inherits SUPER_ADMIN_CAPABILITIES + FANTOMAS_EXTRA_CAPABILITIES. This does NOT require creating SUPER_ADMIN in V1 — V1 has only ADMIN and FANTOMAS. The `can()` abstraction makes the future extension a localized change.
 
@@ -2621,11 +2655,16 @@ Per AISE S6 §30, the baseline is NOT valid until OWNER explicitly approves it. 
 | **No Redis added (OWNER final patch §5)** | **YES** — no Redis, no Vercel KV, no Upstash. Rate limiting uses the same Neon DB as the rest of V1. |
 | **Username plugin explicitly defined (OWNER final patch §5)** | **YES** — TD-003 finalized explicitly names the Better Auth Username plugin; daily login identifier is username (NOT email); Section 12.2 documents the credential model. |
 | **Login Fantomas technically feasible (OWNER final patch §5)** | **YES** — Fantomas logs in with username "Fantomas" via the Username plugin endpoint (`auth.api.signInUsername`). The bootstrap script creates Fantomas with this username via `auth.api.createUser()`. |
-| **Public signup disabled (OWNER final patch §5)** | **YES** — `emailAndPassword.signUp.disabled = true`; no /sign-up endpoint; users created ONLY via bootstrap. |
+| **Public signup disabled (OWNER final patch §5 + auth consistency patch)** | **YES** — `emailAndPassword: { enabled: true, disableSignUp: true }` (Better Auth documented syntax; NOT the old `emailAndPassword.signUp.disabled` form). No /sign-up endpoint; users created ONLY via bootstrap. |
+| **Admin plugin explicitly configured (auth consistency patch)** | **YES** — Better Auth Admin plugin (better-auth/plugins/admin) is explicitly configured server-side; enables `auth.api.createUser()` for the bootstrap script; NOT the business authorization system; no user-management UI in V1. |
+| **principalType present (auth consistency patch)** | **YES** — `principalType` field (enum: 'ADMIN' | 'FANTOMAS') added to user table via Better Auth config; source of truth for `can()` / `requireCapability()`. |
+| **principalType ADMIN/FANTOMAS (auth consistency patch)** | **YES** — Fantomas bootstrap sets `principalType: 'FANTOMAS'`; initial ADMIN bootstrap sets `principalType: 'ADMIN'`. |
+| **Better Auth role != JOURDAIN business principal (auth consistency patch)** | **YES** — Better Auth's `role` field is reserved for Admin plugin internals; JOURDAIN EMPLOI business authorization reads `principalType`, NOT `role`. |
+| **can()/requireCapability() uses principalType (auth consistency patch)** | **YES** — `can()` reads `principal.principalType` (NOT `principal.role`); the authorization layer is independent of Better Auth's internal permissions. |
 | **Bootstrap compatible with Better Auth (OWNER final patch §5)** | **YES** — TD-003 finalized + TD-020 revised + Section 12.5: bootstrap calls `auth.api.createUser()` (Better Auth's SUPPORTED server-side user creation API). Better Auth handles hashing + DB writes. |
 | **No manual password hash INSERT (OWNER final patch §5)** | **YES** — the bootstrap script does NOT manually INSERT password hashes, does NOT bypass Better Auth, does NOT write to the DB directly. All DB writes go through `auth.api.createUser()`. |
 | **Drizzle/Neon driver unique and clearly decided (OWNER final patch §5)** | **YES** — TD-030 finalized: drizzle-orm/neon-http (HTTP-based). NOT "HTTP/WebSockets" as two possibilities. Explicit single binding. |
-| **can()/requireCapability() independent of Better Auth (OWNER final patch §5)** | **YES** — Section 13.2: the authorization layer reads only the `role` field from the session; it does not import Better Auth types or call Better Auth functions for capability checks. The mapping from Better Auth session to our `Principal` type is the ONLY place where Better Auth is imported in the authorization layer. |
+| **can()/requireCapability() independent of Better Auth (OWNER final patch §5 + auth consistency patch)** | **YES** — Section 13.2: the authorization layer reads only the `principalType` field from the session (NOT Better Auth's `role`); it does not import Better Auth types or call Better Auth functions for capability checks. The mapping from Better Auth session to our `Principal` type is the ONLY place where Better Auth is imported in the authorization layer. |
 | **0 OPEN (OWNER final patch §5)** | **YES** — 0 OPEN status; 0 non-blocking open technical decisions (Section 26 — all CLOSED in S6). |
 | **0 PROVISIONAL (OWNER final patch §5)** | **YES** — 0 PROVISIONAL status. |
 | **No other architecture modified (OWNER final patch §5)** | **YES** — only TD-003 (auth + bootstrap), TD-030 (driver), TD-031 (rate limiting), Section 12 (auth flows), Section 14.10 (rate limiting), Section 7.1/7.2 (stack summary), Section 9.3.2 (auth tables note), module map (Section 6) were updated. All other TDs and architecture decisions are unchanged from the previous revision. |
