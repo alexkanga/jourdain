@@ -1242,5 +1242,110 @@ Request only MINIMUM REQUIRED EXTERNAL PRIVILEGE.
 S10 defines the operational implementation of this invariant.
 
 ======================================================================
+25.1 CANONICAL ENVIRONMENT RESOURCE NAMING
+======================================================================
+
+UNIVERSAL RULE — applies to every AISE-managed project.
+
+For any external resource that has separate targets per environment
+(database, cache, API, storage, message broker, etc.):
+
+  PROD_<RESOURCE>_URL     Explicit reference to the Production resource.
+  DEV_<RESOURCE>_URL      Explicit reference to the Development resource.
+  TEST_<RESOURCE>_URL     Explicit reference to the Test resource.
+  <RESOURCE>_URL          Runtime alias used by the application.
+                          Points ONLY to the target authorized for the
+                          current execution context.
+
+SEMANTICS:
+
+  PROD_<RESOURCE>_URL
+    = explicit Production resource reference.
+    Must NOT be present in Development or Test environments unless an
+    operation explicitly requires Production access AND is authorized.
+
+  DEV_<RESOURCE>_URL
+    = explicit Development resource reference.
+
+  TEST_<RESOURCE>_URL
+    = explicit Test resource reference.
+
+  <RESOURCE>_URL
+    = runtime alias. It does NOT automatically mean Production.
+    Its target depends on the authorized execution context:
+
+    Development:  <RESOURCE>_URL → DEV_<RESOURCE>_URL
+    Test:         <RESOURCE>_URL → TEST_<RESOURCE>_URL (or TEST used directly)
+    Production:   <RESOURCE>_URL → PROD_<RESOURCE>_URL
+    Preview:      <RESOURCE>_URL → isolated Preview resource for that deployment
+
+  Application code must NOT select Production/Development/Test itself.
+  The execution environment provides the correct alias value.
+
+SECURITY INVARIANT:
+
+  A Development or Test environment must NOT receive Production
+  credentials unless an operation explicitly requires Production AND
+  is authorized.
+
+  In Development:
+    DATABASE_URL → DEV_DATABASE_URL
+    PROD_DATABASE_URL → absent / inaccessible
+
+  In Test:
+    DATABASE_URL (or TEST_DATABASE_URL) → TEST target
+    PROD_DATABASE_URL → absent / inaccessible
+
+PREVIEW ENVIRONMENTS:
+
+  Preview environments may be dynamic. The universal rule is:
+
+    Preview runtime → <RESOURCE>_URL → Preview resource explicitly
+    isolated for that deployment.
+
+  Preview must NEVER silently point to Production.
+  A permanent PREVIEW_<RESOURCE>_URL variable is NOT required; the
+  platform provides the isolated Preview resource at runtime.
+
+POSITIVE TARGET IDENTIFICATION:
+
+  UNKNOWN TARGET → INVESTIGATE
+  UNKNOWN TARGET → STOP BEFORE WRITE
+
+  Before any sensitive operation (migration, bootstrap, destructive
+  test, seed, reset, deployment DB, schema mutation):
+
+  The target must be identified POSITIVELY.
+
+  "It is probably not Production" is NOT sufficient justification.
+
+NO SECRET VALUES IN GOVERNANCE:
+
+  AISE governance files may contain:
+  - variable names
+  - rules
+  - logical mappings
+  - target classes
+
+  They must NEVER contain:
+  - connection strings
+  - passwords
+  - API keys
+  - tokens
+  - credentials
+
+GIT / RESOURCE MAPPING CLARIFICATION:
+
+  Git branches and external resource branches (e.g., Neon branches)
+  are SEPARATE concepts. They may be associated by environment policy
+  but remain distinct resources.
+
+  Example:
+    Git branch main ≠ Neon branch main
+    Git branch dev  ≠ Neon branch dev
+
+  Association is a policy decision, not an identity equivalence.
+
+======================================================================
 END AI SOFTWARE ENGINEERING OS 0.1
 ======================================================================

@@ -139,13 +139,40 @@ messages/                     French UI strings
 
 ## 8. Runtime / Environment Baseline
 
+Per AISE S0 §25.1 (Canonical Environment Resource Naming):
+
+### Environment Resource Naming (JOURDAIN EMPLOI)
+
+| Variable | Target | Environment |
+|---|---|---|
+| `PROD_DATABASE_URL` | Neon branch main — Production | Production only |
+| `DEV_DATABASE_URL` | Neon branch dev — Development | Development only |
+| `TEST_DATABASE_URL` | Neon branch test — Integration tests | Test only |
+| `DATABASE_URL` | Runtime alias — points to the target authorized for the current context | All environments |
+
+**Runtime alias semantics:**
+- Development: `DATABASE_URL` → `DEV_DATABASE_URL` (Neon dev)
+- Test: `DATABASE_URL` → `TEST_DATABASE_URL` (Neon test)
+- Production: `DATABASE_URL` → `PROD_DATABASE_URL` (Neon main)
+- Preview: `DATABASE_URL` → isolated Neon Preview branch for that deployment
+
+**Security invariant:** Development and Test environments must NOT receive `PROD_DATABASE_URL`. The Z development agent does NOT need Production credentials.
+
+**Git / Database mapping clarification:**
+- Git branch `main` ≠ Neon branch `main` — separate concepts, associated by policy.
+- Git branch `dev` ≠ Neon branch `dev` — separate concepts, associated by policy.
+- Future target: GitHub `main` → Vercel Production → `DATABASE_URL` → Neon main. GitHub work/feature branches → Preview → non-Production DB targets.
+
+### Environment Tiers
+
 | Environment | Database | Purpose |
 |---|---|---|
-| Local dev | Local PostgreSQL or developer-specific Neon branch | Development |
+| Local dev / Z | Neon branch dev (via `DATABASE_URL` = `DEV_DATABASE_URL`) | Development |
 | Preview | Neon preview branch (auto-provisioned per PR) | Vercel Preview deployment |
-| Production | Neon main branch (dedicated, protected) | Live site |
+| Test | Neon branch test (via `TEST_DATABASE_URL`) | Integration tests |
+| Production | Neon main branch (via `DATABASE_URL` = `PROD_DATABASE_URL`) | Live site |
 
-**Critical invariant:** Production database ≠ Preview database. No Vercel Preview deployment writes to Production. Target verification required before any Production write (S0 §25).
+**Critical invariant:** Production database ≠ Preview database ≠ Test database ≠ Dev database. No Vercel Preview deployment writes to Production. Target verification required before any Production write (S0 §25). Positive target identification required — "not obviously Production" is NOT sufficient (S0 §25.1).
 
 **ADR:** ADR-0006
 
