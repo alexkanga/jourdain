@@ -19,11 +19,14 @@ import { eq } from "drizzle-orm";
  * - FANTOMAS_EMAIL (optional, default: "fantomas@jourdain.local")
  */
 
-const FANTOMAS_USERNAME = "Fantomas";
+// Better Auth Username plugin normalizes usernames to lowercase by default.
+// We use the normalized form for all DB queries.
+const FANTOMAS_USERNAME = "fantomas"; // Normalized form of "Fantomas"
+const FANTOMAS_DISPLAY_NAME = "Fantomas"; // Display name (not normalized)
 const FANTOMAS_EMAIL = process.env.FANTOMAS_EMAIL || "fantomas@jourdain.local";
 const FANTOMAS_PASSWORD = process.env.FANTOMAS_INITIAL_PASSWORD;
 
-const ADMIN_LOGIN = process.env.INITIAL_ADMIN_LOGIN || "admin1";
+const ADMIN_LOGIN = (process.env.INITIAL_ADMIN_LOGIN || "admin1").toLowerCase();
 const ADMIN_PASSWORD = process.env.INITIAL_ADMIN_PASSWORD;
 const ADMIN_EMAIL = process.env.INITIAL_ADMIN_EMAIL || `${ADMIN_LOGIN}@jourdain.local`;
 
@@ -49,16 +52,26 @@ async function bootstrap() {
 
   if (existingFantomas.length > 0) {
     console.log(`Fantomas already exists (username="${FANTOMAS_USERNAME}") — not recreated (no overwrite)`);
+    // Verify principalType is correct
+    if (existingFantomas[0].principalType !== "FANTOMAS") {
+      console.log(`  WARNING: principalType is "${existingFantomas[0].principalType}" — expected "FANTOMAS". Fixing...`);
+      await db
+        .update(users)
+        .set({ principalType: "FANTOMAS" })
+        .where(eq(users.id, existingFantomas[0].id));
+      console.log("  Fixed: principalType set to FANTOMAS");
+    }
   } else {
     console.log("Creating Fantomas principal...");
     try {
       // Step 1: Create user via Better Auth Admin plugin (handles password hashing with scrypt)
       // Username goes in the 'data' field for additional fields
+      // Better Auth Username plugin normalizes to lowercase
       await auth.api.createUser({
         body: {
           email: FANTOMAS_EMAIL,
           password: FANTOMAS_PASSWORD,
-          name: "Fantomas",
+          name: FANTOMAS_DISPLAY_NAME,
           data: {
             username: FANTOMAS_USERNAME,
           },
@@ -95,6 +108,15 @@ async function bootstrap() {
 
   if (existingAdmin.length > 0) {
     console.log(`ADMIN already exists (username="${ADMIN_LOGIN}") — not recreated (no overwrite)`);
+    // Verify principalType is correct
+    if (existingAdmin[0].principalType !== "ADMIN") {
+      console.log(`  WARNING: principalType is "${existingAdmin[0].principalType}" — expected "ADMIN". Fixing...`);
+      await db
+        .update(users)
+        .set({ principalType: "ADMIN" })
+        .where(eq(users.id, existingAdmin[0].id));
+      console.log("  Fixed: principalType set to ADMIN");
+    }
   } else {
     console.log("Creating initial ADMIN principal...");
     try {
@@ -131,8 +153,8 @@ async function bootstrap() {
 
   console.log("=== Bootstrap complete ===");
   console.log("Summary:");
-  console.log("  Fantomas: exists (principalType=FANTOMAS)");
-  console.log("  Initial ADMIN: exists (principalType=ADMIN)");
+  console.log(`  Fantomas: exists (username="${FANTOMAS_USERNAME}", principalType=FANTOMAS)`);
+  console.log(`  Initial ADMIN: exists (username="${ADMIN_LOGIN}", principalType=ADMIN)`);
   console.log("  Public signup: disabled");
 }
 

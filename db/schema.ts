@@ -51,13 +51,17 @@ export const users = pgTable("user", {
   emailVerified: text("email_verified"),
   name: text("name"),
   username: text("username").notNull().unique(), // Username plugin
+  displayUsername: text("display_username"), // Username plugin
   image: text("image"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   // V1 business principal field — server-owned (input: false, returned: true)
   principalType: principalType("principal_type").notNull().default("ADMIN"),
-  // Better Auth Admin plugin internal field — NOT used for business authorization
+  // Better Auth Admin plugin internal fields — NOT used for business authorization
   role: text("role"),
+  banned: text("banned"),
+  banReason: text("ban_reason"),
+  banExpires: timestamp("ban_expires", { withTimezone: true }),
 });
 
 // Session table (Better Auth standard — managed by Drizzle adapter)
@@ -70,6 +74,9 @@ export const sessions = pgTable("session", {
     .references(() => users.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  impersonatedBy: text("impersonated_by"),
 });
 
 // Account table (Better Auth standard — credential-account records)
@@ -102,7 +109,7 @@ export const verifications = pgTable("verification", {
 });
 
 // Rate limit table (Better Auth rate limiter with database storage)
-export const rateLimits = pgTable("rate_limit", {
+export const rateLimit = pgTable("rateLimit", {
   id: text("id").primaryKey(),
   key: text("key").notNull(),
   count: text("count").notNull(),
