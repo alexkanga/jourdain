@@ -8,8 +8,13 @@ control plane) to understand where the project stands.
 ## Current phase
 
 PROJECT:                JOURDAIN EMPLOI
-AISE PHASE:             S10 — IMPLEMENTATION (MS-001 closed; MS-002 next)
-STATUS:                 MS-001 CLOSED PASS — WP-001 CLOSED PASS WITH NON-BLOCKING FINDINGS
+AISE PHASE:             S10 — IMPLEMENTATION (MS-001 closed; MS-002 in progress)
+STATUS:                 MS-001 CLOSED PASS — WP-002 IN PROGRESS (DB operations pending)
+CANONICAL RELEASE BRANCH: main
+CANONICAL DEVELOPMENT BRANCH: dev
+ACTIVE DEVELOPMENT BRANCH: dev
+DIRECT DEVELOPMENT ON MAIN: DISALLOWED AFTER CUTOVER (2026-09-15)
+GIT BRANCH POLICY:      main = release/future Vercel Production; dev = canonical development integration
 CHARTER APPROVED:       YES
 CHARTER PATH:           docs/planning/PROJECT_CHARTER.md
 CHARTER APPROVAL DATE:  2026-09-13
