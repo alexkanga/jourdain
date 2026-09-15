@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, uuid, text, jsonb, date, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, uuid, text, boolean, integer, bigint, jsonb, date, timestamp, index } from "drizzle-orm/pg-core";
 
 // Offer status enum — DRAFT, PUBLISHED, SUSPENDED, ARCHIVED (per S5 BR-020, S6 §9.1)
 export const offerStatus = pgEnum("offer_status", [
@@ -48,7 +48,8 @@ export const offers = pgTable(
 export const users = pgTable("user", {
   id: text("id").primaryKey(),
   email: text("email").notNull(),
-  emailVerified: text("email_verified"),
+  // emailVerified: boolean per Better Auth core user schema (sign-up writes false/true)
+  emailVerified: boolean("email_verified").notNull().default(false),
   name: text("name"),
   username: text("username").notNull().unique(), // Username plugin
   displayUsername: text("display_username"), // Username plugin
@@ -59,7 +60,9 @@ export const users = pgTable("user", {
   principalType: principalType("principal_type").notNull().default("ADMIN"),
   // Better Auth Admin plugin internal fields — NOT used for business authorization
   role: text("role"),
-  banned: text("banned"),
+  // banned: boolean per Better Auth Admin plugin schema (admin writes true/false)
+  // Using boolean avoids the "false" string truthiness bug that auto-bans every user
+  banned: boolean("banned").notNull().default(false),
   banReason: text("ban_reason"),
   banExpires: timestamp("ban_expires", { withTimezone: true }),
 });
@@ -109,9 +112,14 @@ export const verifications = pgTable("verification", {
 });
 
 // Rate limit table (Better Auth rate limiter with database storage)
+// Better Auth's rate limiter writes `count: <number>` and `lastRequest: Date.now()` (epoch millis number).
+// Using `integer` for count and `bigint({ mode: "number" })` for lastRequest accepts the numeric
+// values directly without Drizzle's PgTimestamp expecting a Date object. The Drizzle adapter's
+// customTransformOutput converts the value back to a Date on read via `new Date(data)`, which
+// accepts numbers as epoch millis — so read/write both work.
 export const rateLimit = pgTable("rateLimit", {
   id: text("id").primaryKey(),
   key: text("key").notNull(),
-  count: text("count").notNull(),
-  lastRequest: timestamp("last_request", { withTimezone: true }).notNull(),
+  count: integer("count").notNull(),
+  lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });

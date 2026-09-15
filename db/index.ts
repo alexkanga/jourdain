@@ -23,7 +23,9 @@ function getDb() {
 export const db = new Proxy({} as ReturnType<typeof drizzle>, {
   get(_target, prop) {
     const dbInstance = getDb();
+    // Dynamic proxy — forwards any property access to the lazily-initialised drizzle instance.
     // biome-ignore lint/suspicious/noExplicitAny: dynamic proxy
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (dbInstance as any)[prop];
   },
 });
