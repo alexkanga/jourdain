@@ -8,8 +8,8 @@ control plane) to understand where the project stands.
 ## Current phase
 
 PROJECT:                JOURDAIN EMPLOI
-AISE PHASE:             S8 — DELIVERY ROADMAP
-STATUS:                 CLOSED PASS — DELIVERY ROADMAP APPROVED
+AISE PHASE:             S10 — IMPLEMENTATION (MS-001 closed; MS-002 next)
+STATUS:                 MS-001 CLOSED PASS — WP-001 CLOSED PASS WITH NON-BLOCKING FINDINGS
 CHARTER APPROVED:       YES
 CHARTER PATH:           docs/planning/PROJECT_CHARTER.md
 CHARTER APPROVAL DATE:  2026-09-13
@@ -28,24 +28,31 @@ DELIVERY ROADMAP APPROVED: YES
 DELIVERY ROADMAP PATH:  docs/planning/DELIVERY_ROADMAP.md
 DELIVERY ROADMAP APPROVAL DATE: 2026-09-15
 MILESTONE COUNT:        7 (MS-001 through MS-007)
-FUTURE WORK PACKAGE COUNT: 7 (WP-Foundation, WP-DatabaseAuth, WP-AdminOffers, WP-PublicPortal, WP-E2EHardening, WP-EnvironmentsCICD, WP-ReleaseReadiness — NOT YET AUTHORIZED)
-S9 FIRST CANDIDATE:     MS-001 — Application Foundation
+MILESTONES CLOSED:      1 (MS-001)
+MILESTONES REMAINING:   6 (MS-002 through MS-007)
+WORK PACKAGES CLOSED:   1 (WP-001 — CLOSED / PASS WITH NON-BLOCKING FINDINGS)
+WORK PACKAGES REMAINING: 6 (WP-002 through WP-007 — NOT YET AUTHORIZED)
+WP-001 CONTRACT BASELINE: a0d6672145a14dd466d59541abc6cd41e56201f1
+WP-001 IMPLEMENTATION COMMIT: 45fa8b7cadbed42db4df9f574eb726c40154cb09
+WP-001 S11 VERDICT:     PASS WITH NON-BLOCKING FINDINGS
+WP-001 NON-BLOCKING FINDING: pnpm build-script warning for esbuild/unrs-resolver (transitive devDeps) — no functional impact
 CANONICAL BRANCH:       main
-CANONICAL HEAD:         2796c2d0cd76673c2ab4ecfdc8357c01f0c1a88a
+CANONICAL HEAD:         45fa8b7cadbed42db4df9f574eb726c40154cb09
 REMOTE:                 configured (origin → git@github.com-aise-alexkanga-jourdain:alexkanga/jourdain.git)
-REMOTE HEAD:            2796c2d0cd76673c2ab4ecfdc8357c01f0c1a88a
+REMOTE HEAD:            45fa8b7cadbed42db4df9f574eb726c40154cb09
 LOCAL = REMOTE:         YES
 AISE SOURCE COMMIT:     2991df51c1fa692f892452c361081c626f028cd0
-COMPLETED COMPONENTS:   S0, S1, S2, S3, S4, S5, S6, S7, S8 installed and canonical
+COMPLETED COMPONENTS:   S0, S1, S2, S3, S4, S5, S6, S7, S8, S9 (WP-001) installed and canonical
 PRODUCT DISCOVERY:      CLOSED PASS — CHARTER APPROVED (S4)
 PRODUCT REQUIREMENTS:   CLOSED PASS — PRODUCT REQUIREMENTS APPROVED (S5)
 TECHNICAL SPECIFICATION: CLOSED PASS — TECHNICAL SPECIFICATION APPROVED (S6)
 PROJECT MANIFEST/ADR:   CLOSED PASS — PROJECT MANIFEST AND ADRS APPROVED (S7)
 DELIVERY ROADMAP:        CLOSED PASS — DELIVERY ROADMAP APPROVED (S8)
-IMPLEMENTATION:         NOT STARTED (S10)
-DEFERRED DECISIONS:     Charter-level: D1 (GDPR details — future), D2 (migration scope — only if needed), D3 (data residency — future). S5-level: DR-030/040 (full audit log — future), DR-050 (admin UI — future), DR-051 (SUPER_ADMIN role — future), DR-160 (GDPR — future), DR-170 (data residency — future). All explicitly non-blocking for S9 or V1.
+MS-001 APPLICATION FOUNDATION: CLOSED PASS — WP-001 CLOSED PASS WITH NON-BLOCKING FINDINGS (S9+S10+S11)
+IMPLEMENTATION:         IN PROGRESS (MS-001 closed; MS-002 not started)
+DEFERRED DECISIONS:     Charter-level: D1 (GDPR details — future), D2 (migration scope — only if needed), D3 (data residency — future). S5-level: DR-030/040 (full audit log — future), DR-050 (admin UI — future), DR-051 (SUPER_ADMIN role — future), DR-160 (GDPR — future), DR-170 (data residency — future). All explicitly non-blocking for V1.
 NEXT AUTHORIZED:        NONE until OWNER GO
-NEXT RECOMMENDED:       S9 — Module Contract / Work Package
+NEXT RECOMMENDED:       S9 — prepare WP-002 (Database + Auth Foundation, MS-002)
 
 ## What exists
 
@@ -228,8 +235,9 @@ Architectural constraint (OWNER-stated):
 
 ## Stop contract
 
-S8 is CLOSED / PASS — DELIVERY ROADMAP APPROVED. S9 has NOT
-started. S9 begins only after explicit OWNER GO.
+MS-001 / WP-001 is CLOSED / PASS WITH NON-BLOCKING FINDINGS.
+MS-002 / WP-002 has NOT started. S9 for WP-002 begins only after
+explicit OWNER GO.
 
-NEXT RECOMMENDED COMPONENT: S9 — Module Contract / Work Package
+NEXT RECOMMENDED COMPONENT: S9 — prepare WP-002 (Database + Auth Foundation, MS-002)
 NEXT ACTION: OWNER GO REQUIRED

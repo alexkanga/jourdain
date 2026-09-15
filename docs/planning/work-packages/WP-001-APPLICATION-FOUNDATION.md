@@ -15,8 +15,13 @@
 | Source Technical Specification (S6) | `docs/architecture/TECHNICAL_SPECIFICATION.md` at `7c85323` |
 | Source Project Manifest (S7) | `docs/architecture/PROJECT_MANIFEST.md` at `0b8b436` |
 | Source Delivery Roadmap (S8) | `docs/planning/DELIVERY_ROADMAP.md` at `2796c2d` |
-| OWNER Approval | PENDING |
-| S10 Authorization | NOT GRANTED (requires OWNER APPROVE + AUTHORIZE) |
+| OWNER Approval | APPROVED + AUTHORIZED (2026-09-15) |
+| S10 Authorization | CONSUMED — implementation complete, verified, closed |
+| S11 Verdict | PASS WITH NON-BLOCKING FINDINGS (2026-09-15) |
+| S11 Finding | pnpm build-script warning for esbuild/unrs-resolver (transitive devDeps) — non-blocking, no functional impact |
+| OWNER Acceptance | ACCEPTED (2026-09-15) — finding accepted as non-blocking, no correction requested |
+| Implementation Commit | `45fa8b7cadbed42db4df9f574eb726c40154cb09` |
+| WP Status | CLOSED / PASS WITH NON-BLOCKING FINDINGS |
 
 ---
 
@@ -369,9 +374,9 @@ Files that S10 is authorized to create or modify:
 
 | Field | Value |
 |---|---|
-| WP Status | DRAFT — PENDING OWNER APPROVAL + AUTHORIZATION |
-| OWNER Approval | PENDING |
-| S10 Authorization | NOT GRANTED |
+| WP Status | CLOSED / PASS WITH NON-BLOCKING FINDINGS |
+| OWNER Approval | APPROVED + AUTHORIZED (2026-09-15) |
+| S10 Authorization | CONSUMED — implementation complete, verified, closed |
 | Next WP | WP-002 — Database + Auth Foundation (NOT YET AUTHORIZED) |
 
 ### Quality Gate Self-Check (per S9 §46)
