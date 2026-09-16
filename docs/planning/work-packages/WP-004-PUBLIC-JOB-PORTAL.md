@@ -84,7 +84,7 @@ Full Playwright E2E suite (MS-005), Vercel/Neon deployment configuration (MS-006
 
 ### Public Offer List (Root URL `/`)
 
-- `app/(public)/page.tsx` (Server Component) — root URL `/` displays PUBLISHED offers as cards per S5 §10.1
+- `app/(public)/page.tsx` (Server Component) — root URL `/` displays PUBLISHED offers as cards per S5 §10.1. This is the SINGLE canonical root route. The existing WP-001 placeholder `app/page.tsx` MUST be removed by S10 so there is exactly ONE page resolving to `/`.
 - Server-side query: `SELECT ... FROM offers WHERE status = 'PUBLISHED' ORDER BY published_at DESC, created_at DESC` (BR-070, BR-071)
 - Cards show: title (always), company (if present — omit if absent per BR-033), location (if present), contract_type (if present), published_at (always — formatted as French date), application_deadline (if present), "Voir l'offre" link to `/offres/{id}` (always)
 - Pagination: simple page-based server-side pagination (FR-040 acceptance: "list is navigable when the number of offers exceeds a single page")
@@ -92,7 +92,7 @@ Full Playwright E2E suite (MS-005), Vercel/Neon deployment configuration (MS-006
 
 ### Public Offer Detail (`/offres/{id}`)
 
-- `app/(public)/offres/[id]/page.tsx` (Server Component) — displays full detail of a PUBLISHED offer per S5 §10.2
+- `app/(public)/offres/[id]/page.tsx` (Server Component) — displays full detail of a PUBLISHED offer per S5 §10.2. Canonical route: `/offres/{uuid}` (ADR-0009). No competing detail route.
 - Server-side query: `SELECT ... FROM offers WHERE id = ? AND status = 'PUBLISHED'` — non-PUBLISHED or nonexistent → `notFound()` (FR-042, ADR-0009)
 - Detail shows: title, company (if absent: "Entreprise non communiquée" per BR-033), sector, category, contract_type, education_level, experience, location, dates (source_publication_date, published_at, application_deadline — if present), full description (Tiptap rendered), application modalities block (if any present — text/email/URL as links, NO Apply button per BR-040), source block (if source_name or source_url present)
 - Malformed UUID → controlled not-found (no DB query)
@@ -106,23 +106,30 @@ Full Playwright E2E suite (MS-005), Vercel/Neon deployment configuration (MS-006
 - Empty search → full list
 - No public API endpoint, no Elasticsearch, no external search service
 
-### Tiptap Public Rendering
+### Tiptap Public Rendering (Server Component — server-side, read-only)
 
-- `components/public/OfferDescription.tsx` (or equivalent) — renders Tiptap JSON to safe React elements using `@tiptap/react` in a Server Component
-- Supports V1 subset: paragraphs, headings (1-3), bullet lists, ordered lists, links, bold, italic (same subset as admin editor)
-- No `dangerouslySetInnerHTML` (ADR-0005)
-- No raw HTML storage or rendering
+- `components/public/OfferDescription.tsx` (or equivalent) — renders Tiptap JSON to safe React elements in a Server Component.
+- Required behavior: Tiptap JSON → safe React element rendering → no raw HTML source → no dangerouslySetInnerHTML → no arbitrary HTML injection.
+- Supports V1 subset: paragraphs, headings (1-3), bullet lists, ordered lists, links, bold, italic (same subset as admin editor).
+- No editor instance in public page. No unnecessary client JavaScript. No raw HTML roundtrip.
+- The public detail page must remain Server Component / server-first unless a genuine technical requirement proves otherwise. Do NOT convert the public detail page into a Client Component merely to reuse admin editor tooling.
+- S10 may use the simplest technically valid option: a small deterministic JSON-to-React renderer is acceptable if it satisfies ADR-0005 semantics. Do NOT create a generalized rich-text framework.
+- If S10 discovers that the canonical rendering requirement cannot be safely implemented with existing dependencies: STOP and report `TIPTAP PUBLIC RENDERING DEPENDENCY GAP`. Do NOT silently install @tiptap/static-renderer, another rich text renderer, HTML sanitizer library, or any new package. OWNER authorization is required before adding a new dependency.
 
-### SEO
+### SEO (canonically required by TD-029, ADR-0009, S8 MS-004 roadmap)
 
-- `app/sitemap.ts` — generates sitemap.xml listing all PUBLISHED offers with their `/offres/{id}` URLs
-- `app/robots.ts` — allows indexing of public pages, disallows `/admin/*`
-- `generateMetadata` on each public page (list + detail) for title/description
+- `app/sitemap.ts` — generates sitemap.xml listing all PUBLISHED offers with their `/offres/{id}` URLs (TD-029, ADR-0009 verification)
+- `app/robots.ts` — allows indexing of public pages, disallows `/admin/*` (TD-029)
+- `generateMetadata` on each public page (list + detail) for title/description (TD-029)
+- Canonical: S6 TD-029 states `SELECTED: Next.js metadata API (generateMetadata per route) + sitemap.xml route + robots.txt route`. ADR-0009 verification requires `Verify sitemap.ts lists all PUBLISHED offers`. S8 MS-04 roadmap lists `app/sitemap.ts, app/robots.ts` in TECHNICAL AREAS.
 
-### Public Layout
+### Public Route Group (frozen topology)
 
-- `app/(public)/layout.tsx` — minimal public layout (no auth, no admin controls)
-- `app/page.tsx` — replaced with public offer list (was placeholder from WP-001)
+- Route group: `app/(public)/` — route groups do NOT change URLs.
+- `app/(public)/page.tsx` — root URL `/` = PUBLISHED offers list (FR-040). SINGLE canonical root route.
+- `app/(public)/offres/[id]/page.tsx` — detail at `/offres/{uuid}` (FR-041, FR-042, ADR-0009).
+- `app/(public)/layout.tsx` — minimal public layout (no auth, no admin controls). ONLY if genuinely useful; do not create unnecessary nested routing.
+- `app/page.tsx` (existing WP-001 placeholder) MUST be removed by S10. There must be exactly ONE page resolving to `/`. Do NOT create `/` and `/offres` as competing public list pages. Canonical list route = `/`. Canonical detail route = `/offres/[id]`.
 
 ### Tests
 
@@ -347,7 +354,7 @@ WP-004 must NOT modify any WP-003 admin code:
 | AC-021 | Sitemap | app/sitemap.ts generates valid sitemap.xml with PUBLISHED offer URLs (integration test) |
 | AC-022 | Robots | app/robots.ts allows public pages, disallows /admin/* (code inspection) |
 | AC-023 | generateMetadata | Public pages export generateMetadata with title/description (code inspection) |
-| AC-024 | Root page replaced | app/page.tsx is the public offer list (not placeholder from WP-001) |
+| AC-024 | Root page served by route group | `app/(public)/page.tsx` is the root URL `/`; `app/page.tsx` placeholder removed; exactly ONE page resolves to `/` |
 | AC-025 | No schema changes | db/schema.ts unchanged; no new migrations (code inspection) |
 | AC-026 | No auth core changes | lib/server/auth/* unchanged (code inspection) |
 | AC-027 | lint PASS | pnpm lint exit 0 |
@@ -451,16 +458,20 @@ No CRITICAL or HIGH blockers identified.
 
 ### Authorized Dependencies
 
-No new dependencies expected. `@tiptap/react` is already installed (from WP-003) and will be used for the public Tiptap renderer in a Server Component.
+**NEW DEPENDENCIES: NONE EXPECTED.**
+
+S10 must first verify whether the already-installed stack can safely render the approved Tiptap JSON subset in a Server Component. The already-installed `@tiptap/react` (from WP-003) MAY be usable for server-side rendering, but S10 must verify this at implementation time. A small deterministic JSON-to-React renderer using only existing dependencies is also acceptable if it satisfies ADR-0005 semantics.
+
+If S10 discovers that the canonical rendering requirement cannot be safely implemented with existing dependencies: STOP and report `TIPTAP PUBLIC RENDERING DEPENDENCY GAP`. Do NOT silently install any new package. OWNER authorization is required before adding a new dependency.
 
 ### Allowed Change Surface
 
 | File/Directory | Action | Notes |
 |---|---|---|
-| `app/(public)/` or `app/` | CREATE | Public route group: layout.tsx, page.tsx (root = offer list), offres/[id]/page.tsx (detail) |
-| `app/page.tsx` | MODIFY | Replace placeholder with public offer list (or redirect to public route) |
-| `app/sitemap.ts` | CREATE | Sitemap for PUBLISHED offers |
-| `app/robots.ts` | CREATE | Allow public, disallow /admin/* |
+| `app/(public)/` | CREATE | Public route group: page.tsx (root = offer list), offres/[id]/page.tsx (detail), optionally layout.tsx |
+| `app/page.tsx` | DELETE | Remove existing WP-001 placeholder. The root URL `/` is served by `app/(public)/page.tsx`. There must be exactly ONE page resolving to `/`. |
+| `app/sitemap.ts` | CREATE | Sitemap for PUBLISHED offers (TD-029, ADR-0009) |
+| `app/robots.ts` | CREATE | Allow public, disallow /admin/* (TD-029) |
 | `components/public/` | CREATE | Public-only components: OfferCard, OfferDetail, TiptapRenderer |
 | `lib/server/services/public-offers.ts` (or extend offers.ts) | CREATE | Public read-only query functions (listPublishedOffers, getPublishedOfferById) |
 | Test files | CREATE | Integration tests against TEST_DATABASE_URL |
