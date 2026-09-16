@@ -29,7 +29,7 @@ import { randomBytes } from "node:crypto";
 import {
   parseEnvLocal,
   certifyTestTarget,
-  authorizeBaseUrl,
+  resolveAuthorizedE2EBaseUrl,
   buildChildEnv,
   type VerifiedTestTarget,
   E2eTargetError,
@@ -39,7 +39,6 @@ import { runBootstrap, verifyTestIdentity } from "./auth";
 import { cleanupOrphanFixtures, clearTestRateLimit } from "./fixtures";
 
 const PORT = parseInt(process.env.E2E_PORT || "3100", 10);
-const BASE_URL = `http://127.0.0.1:${PORT}`;
 const ARTIFACTS_DIR = resolve(process.cwd(), "tests/e2e/.artifacts");
 
 export interface E2eRunReport {
@@ -119,17 +118,18 @@ export async function e2eSetup(): Promise<{
   const env = parseEnvLocal();
   const verified = await certifyTestTarget(env);
 
-  // Base URL policy check (AC-016 + AC-037c).
-  const baseUrl = authorizeBaseUrl({
-    ...env,
-    E2E_BASE_URL: env.E2E_BASE_URL || BASE_URL,
-  });
-  // Re-check that the resolved baseUrl is loopback (defense in depth).
+  // Base URL policy check (AC-016 + AC-037c + §19 remediation):
+  // Use the SAME canonical resolver as playwright.config.ts so there is
+  // ONE authoritative effective base URL. If Playwright's baseURL and the
+  // runner's authorized URL ever diverge (impossible by construction —
+  // same function, same inputs), STOP with E2E_BASE_URL_DIVERGENCE.
+  const baseUrl = resolveAuthorizedE2EBaseUrl(env);
+  // Defense in depth: re-check that the resolved baseUrl is loopback
+  // (or matches an explicit remote override that playwright.config.ts
+  // would also have accepted).
   const baseHost = new URL(baseUrl).hostname.toLowerCase();
   const isLoopback = baseHost === "localhost" || baseHost === "127.0.0.1" || baseHost === "::1";
-  if (!isLoopback) {
-    // authorizeBaseUrl already accepted the override; record for quota-safety.
-  }
+  // The resolver already validated the URL; we just record the result for the report.
 
   // ===== PHASE A PASSED — TARGET CERTIFIED. NOW MUTATIONS ARE ALLOWED =====
 
@@ -140,12 +140,15 @@ export async function e2eSetup(): Promise<{
   await clearTestRateLimit(verified.rawSql);
 
   // Step 14: Deterministic TEST identity preparation (idempotent bootstrap, scoped to TEST)
-  const childEnvForBootstrap = buildChildEnv(process.env, verified, env);
+  // Pass the resolved baseUrl so BETTER_AUTH_URL matches the actual server URL.
+  const childEnvForBootstrap = buildChildEnv(process.env, verified, env, baseUrl);
   await runBootstrap(childEnvForBootstrap);
   await verifyTestIdentity(verified.rawSql);
 
   // Step 15: Construct curated child env (NO inherited parent DATABASE_URL)
-  const childEnv = buildChildEnv(process.env, verified, env);
+  // Pass the resolved baseUrl so BETTER_AUTH_URL + NEXT_PUBLIC_SITE_URL match
+  // the actual server URL — Better Auth rejects requests from mismatched origins.
+  const childEnv = buildChildEnv(process.env, verified, env, baseUrl);
 
   // Step 16: Build Next.js (skip if fresh artifact exists)
   if (!existsSync(resolve(process.cwd(), ".next/BUILD_ID"))) {

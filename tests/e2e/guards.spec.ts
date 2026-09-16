@@ -37,6 +37,7 @@ import {
   parseEnvLocal,
   certifyTestTarget,
   authorizeBaseUrl,
+  resolveAuthorizedE2EBaseUrl,
   buildChildEnv,
   hostnameOf,
   E2eTargetError,
@@ -86,14 +87,25 @@ test.describe("Guard self-tests — base URL policy (AC-030, AC-031, AC-037c, AC
     ).toThrowError(E2E_ERRORS.REMOTE_BASE_URL_NOT_AUTHORIZED);
   });
 
-  test("AC-037c: remote override accepted with all THREE variables set", () => {
+  test("AC-037c: remote override accepted when E2E_BASE_URL matches E2E_REMOTE_BASE_URL (all THREE set)", () => {
     const url = authorizeBaseUrl({
-      E2E_BASE_URL: "https://example.com",
+      E2E_BASE_URL: "https://staging.example.com",
       E2E_ALLOW_REMOTE: "1",
       E2E_REMOTE_BASE_URL: "https://staging.example.com",
       E2E_REMOTE_AUTHORIZATION_REF: "OWNER-AUTH-2026-09-16-WP005-REMOTE-E2E",
     });
     expect(url).toBe("https://staging.example.com");
+  });
+
+  test("AC-037c (mismatch): E2E_BASE_URL != E2E_REMOTE_BASE_URL → REFUSED", () => {
+    expect(() =>
+      authorizeBaseUrl({
+        E2E_BASE_URL: "https://remote-a.example",
+        E2E_ALLOW_REMOTE: "1",
+        E2E_REMOTE_BASE_URL: "https://remote-b.example",
+        E2E_REMOTE_AUTHORIZATION_REF: "OWNER-AUTH",
+      }),
+    ).toThrowError(E2E_ERRORS.REMOTE_BASE_URL_NOT_AUTHORIZED);
   });
 
   test("AC-037d: E2E_REMOTE_AUTHORIZATION_REF treated as non-secret reference (empty string → REFUSED)", () => {
@@ -116,6 +128,206 @@ test.describe("Guard self-tests — base URL policy (AC-030, AC-031, AC-037c, AC
       E2E_REMOTE_AUTHORIZATION_REF: "any-non-empty-string-not-validated",
     });
     expect(url).toBe("https://example.com");
+  });
+
+  // Additional base-URL guard tests (§13 A-L)
+  test("§13-A: no E2E_BASE_URL → default loopback allowed", () => {
+    const url = authorizeBaseUrl({});
+    expect(url).toBe("http://127.0.0.1:3100");
+  });
+
+  test("§13-B: shell E2E_BASE_URL=http://127.0.0.1:3100 → allowed", () => {
+    const url = authorizeBaseUrl({ E2E_BASE_URL: "http://127.0.0.1:3100" });
+    expect(url).toBe("http://127.0.0.1:3100");
+  });
+
+  test("§13-C: shell E2E_BASE_URL=http://localhost:3100 → allowed", () => {
+    const url = authorizeBaseUrl({ E2E_BASE_URL: "http://localhost:3100" });
+    expect(url).toBe("http://localhost:3100");
+  });
+
+  test("§13-D: shell E2E_BASE_URL=https://example.com without remote authorization → REFUSED", () => {
+    expect(() =>
+      authorizeBaseUrl({ E2E_BASE_URL: "https://example.com" }),
+    ).toThrowError(E2E_ERRORS.REMOTE_BASE_URL_NOT_AUTHORIZED);
+  });
+
+  test("§13-E: .env.local remote E2E_BASE_URL without remote authorization → REFUSED", () => {
+    // Simulate a .env.local-provided remote E2E_BASE_URL (no process.env, no override)
+    expect(() =>
+      authorizeBaseUrl({ E2E_BASE_URL: "https://preview.example.com" }),
+    ).toThrowError(E2E_ERRORS.REMOTE_BASE_URL_NOT_AUTHORIZED);
+  });
+
+  test("§13-F: partial remote override (missing E2E_REMOTE_AUTHORIZATION_REF) → REFUSED", () => {
+    expect(() =>
+      authorizeBaseUrl({
+        E2E_BASE_URL: "https://example.com",
+        E2E_ALLOW_REMOTE: "1",
+        E2E_REMOTE_BASE_URL: "https://example.com",
+        // E2E_REMOTE_AUTHORIZATION_REF missing
+      }),
+    ).toThrowError(E2E_ERRORS.REMOTE_BASE_URL_NOT_AUTHORIZED);
+  });
+
+  test("§13-G: full matching remote override → authorization logic accepts (no network request)", () => {
+    // This test verifies the authorization LOGIC only. No actual network request is made.
+    const url = authorizeBaseUrl({
+      E2E_BASE_URL: "https://staging.example.com",
+      E2E_ALLOW_REMOTE: "1",
+      E2E_REMOTE_BASE_URL: "https://staging.example.com",
+      E2E_REMOTE_AUTHORIZATION_REF: "OWNER-AUTH-2026-09-16",
+    });
+    expect(url).toBe("https://staging.example.com");
+  });
+
+  test("§13-H: full override where E2E_BASE_URL != E2E_REMOTE_BASE_URL → REFUSED", () => {
+    expect(() =>
+      authorizeBaseUrl({
+        E2E_BASE_URL: "https://staging-a.example.com",
+        E2E_ALLOW_REMOTE: "1",
+        E2E_REMOTE_BASE_URL: "https://staging-b.example.com",
+        E2E_REMOTE_AUTHORIZATION_REF: "OWNER-AUTH",
+      }),
+    ).toThrowError(E2E_ERRORS.REMOTE_BASE_URL_NOT_AUTHORIZED);
+  });
+
+  test("§13-I: malformed URL → REFUSED", () => {
+    expect(() =>
+      authorizeBaseUrl({ E2E_BASE_URL: "not-a-url" }),
+    ).toThrowError(E2E_ERRORS.REMOTE_BASE_URL_NOT_AUTHORIZED);
+  });
+
+  test("§13-J: file: scheme → REFUSED", () => {
+    expect(() =>
+      authorizeBaseUrl({ E2E_BASE_URL: "file:///etc/passwd" }),
+    ).toThrowError(E2E_ERRORS.REMOTE_BASE_URL_NOT_AUTHORIZED);
+  });
+
+  test("§13-J: data: scheme → REFUSED", () => {
+    expect(() =>
+      authorizeBaseUrl({ E2E_BASE_URL: "data:text/html,<script>alert(1)</script>" }),
+    ).toThrowError(E2E_ERRORS.REMOTE_BASE_URL_NOT_AUTHORIZED);
+  });
+
+  test("§13-J: javascript: scheme → REFUSED", () => {
+    expect(() =>
+      authorizeBaseUrl({ E2E_BASE_URL: "javascript:alert(1)" }),
+    ).toThrowError(E2E_ERRORS.REMOTE_BASE_URL_NOT_AUTHORIZED);
+  });
+
+  test("§13-K: localhost.example.com → REFUSED as remote (deceptive hostname)", () => {
+    expect(() =>
+      authorizeBaseUrl({ E2E_BASE_URL: "http://localhost.example.com" }),
+    ).toThrowError(E2E_ERRORS.REMOTE_BASE_URL_NOT_AUTHORIZED);
+  });
+
+  test("§13-K: 127.0.0.1.example.com → REFUSED as remote", () => {
+    expect(() =>
+      authorizeBaseUrl({ E2E_BASE_URL: "http://127.0.0.1.example.com" }),
+    ).toThrowError(E2E_ERRORS.REMOTE_BASE_URL_NOT_AUTHORIZED);
+  });
+
+  test("§13-L: localhost@evil.example → REFUSED (userinfo deception)", () => {
+    expect(() =>
+      authorizeBaseUrl({ E2E_BASE_URL: "http://localhost@evil.example" }),
+    ).toThrowError(E2E_ERRORS.REMOTE_BASE_URL_NOT_AUTHORIZED);
+  });
+
+  test("§13-L: example.com?host=localhost → REFUSED (query string does not change hostname)", () => {
+    expect(() =>
+      authorizeBaseUrl({ E2E_BASE_URL: "https://example.com?host=localhost" }),
+    ).toThrowError(E2E_ERRORS.REMOTE_BASE_URL_NOT_AUTHORIZED);
+  });
+});
+
+// ============================================================
+// §19 BYPASS REGRESSION: E2E_BASE_URL via process.env must NOT bypass the guard
+// ============================================================
+
+test.describe("Guard self-tests — §19 bypass regression (E2E_BASE_URL bypass fix)", () => {
+  // These tests verify that resolveAuthorizedE2EBaseUrl() — the CANONICAL
+  // resolver used by BOTH playwright.config.ts AND runner.ts — applies the
+  // SAME authorization logic regardless of whether E2E_BASE_URL comes from
+  // process.env or .env.local. There must be NO path where Playwright can
+  // be pointed remotely without passing the guard.
+
+  test("§19 BYPASS REGRESSION: process.env.E2E_BASE_URL=https://example.com with no override → REFUSED", () => {
+    // Simulate the S11 bypass scenario: process.env has E2E_BASE_URL, .env.local does not.
+    const originalEnvBase = process.env.E2E_BASE_URL;
+    const originalAllowRemote = process.env.E2E_ALLOW_REMOTE;
+    const originalRemoteBase = process.env.E2E_REMOTE_BASE_URL;
+    const originalAuthRef = process.env.E2E_REMOTE_AUTHORIZATION_REF;
+    try {
+      process.env.E2E_BASE_URL = "https://example.com";
+      delete process.env.E2E_ALLOW_REMOTE;
+      delete process.env.E2E_REMOTE_BASE_URL;
+      delete process.env.E2E_REMOTE_AUTHORIZATION_REF;
+      // .env.local has NO E2E_BASE_URL (simulated by empty record)
+      expect(() => resolveAuthorizedE2EBaseUrl({})).toThrowError(
+        E2E_ERRORS.REMOTE_BASE_URL_NOT_AUTHORIZED,
+      );
+    } finally {
+      if (originalEnvBase !== undefined) process.env.E2E_BASE_URL = originalEnvBase;
+      else delete process.env.E2E_BASE_URL;
+      if (originalAllowRemote !== undefined) process.env.E2E_ALLOW_REMOTE = originalAllowRemote;
+      else delete process.env.E2E_ALLOW_REMOTE;
+      if (originalRemoteBase !== undefined) process.env.E2E_REMOTE_BASE_URL = originalRemoteBase;
+      else delete process.env.E2E_REMOTE_BASE_URL;
+      if (originalAuthRef !== undefined) process.env.E2E_REMOTE_AUTHORIZATION_REF = originalAuthRef;
+      else delete process.env.E2E_REMOTE_AUTHORIZATION_REF;
+    }
+  });
+
+  test("§19 BYPASS REGRESSION: process.env.E2E_BASE_URL=http://127.0.0.1:3100 (loopback) → ALLOWED", () => {
+    const originalEnvBase = process.env.E2E_BASE_URL;
+    try {
+      process.env.E2E_BASE_URL = "http://127.0.0.1:3100";
+      const url = resolveAuthorizedE2EBaseUrl({});
+      expect(url).toBe("http://127.0.0.1:3100");
+    } finally {
+      if (originalEnvBase !== undefined) process.env.E2E_BASE_URL = originalEnvBase;
+      else delete process.env.E2E_BASE_URL;
+    }
+  });
+
+  test("§19 BYPASS REGRESSION: .env.local E2E_BASE_URL=https://example.com (no process.env, no override) → REFUSED", () => {
+    const originalEnvBase = process.env.E2E_BASE_URL;
+    try {
+      delete process.env.E2E_BASE_URL;
+      // .env.local has a remote E2E_BASE_URL, no override
+      expect(() =>
+        resolveAuthorizedE2EBaseUrl({ E2E_BASE_URL: "https://example.com" }),
+      ).toThrowError(E2E_ERRORS.REMOTE_BASE_URL_NOT_AUTHORIZED);
+    } finally {
+      if (originalEnvBase !== undefined) process.env.E2E_BASE_URL = originalEnvBase;
+      else delete process.env.E2E_BASE_URL;
+    }
+  });
+
+  test("§19 BYPASS REGRESSION: process.env takes precedence over .env.local (both loopback → loopback)", () => {
+    const originalEnvBase = process.env.E2E_BASE_URL;
+    try {
+      process.env.E2E_BASE_URL = "http://127.0.0.1:3100";
+      // .env.local has a different loopback URL — process.env wins
+      const url = resolveAuthorizedE2EBaseUrl({ E2E_BASE_URL: "http://localhost:3100" });
+      expect(url).toBe("http://127.0.0.1:3100");
+    } finally {
+      if (originalEnvBase !== undefined) process.env.E2E_BASE_URL = originalEnvBase;
+      else delete process.env.E2E_BASE_URL;
+    }
+  });
+
+  test("§19 BYPASS REGRESSION: default when neither process.env nor .env.local set → http://127.0.0.1:3100", () => {
+    const originalEnvBase = process.env.E2E_BASE_URL;
+    try {
+      delete process.env.E2E_BASE_URL;
+      const url = resolveAuthorizedE2EBaseUrl({});
+      expect(url).toBe("http://127.0.0.1:3100");
+    } finally {
+      if (originalEnvBase !== undefined) process.env.E2E_BASE_URL = originalEnvBase;
+      else delete process.env.E2E_BASE_URL;
+    }
   });
 });
 
