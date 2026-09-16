@@ -8,8 +8,8 @@ control plane) to understand where the project stands.
 ## Current phase
 
 PROJECT:                JOURDAIN EMPLOI
-AISE PHASE:             S12 — WP-002 / MS-002 CLOSURE (owner-accepted)
-STATUS:                 MS-002 CLOSED PASS — WP-002 CLOSED PASS — ready for preparation of MS-003 / WP-003, but WP-003 NOT YET AUTHORIZED
+AISE PHASE:             WP-003 / MS-003 CLOSURE (owner-accepted S11 PASS WITH NON-BLOCKING FINDINGS)
+STATUS:                 MS-003 CLOSED PASS WITH NON-BLOCKING FINDINGS — WP-003 CLOSED — ready for AISE Universal Patch (Hobby-Safe / Quota-Safe), then WP-004 preparation
 CANONICAL RELEASE BRANCH: main
 CANONICAL DEVELOPMENT BRANCH: dev
 ACTIVE DEVELOPMENT BRANCH: dev
@@ -33,10 +33,10 @@ DELIVERY ROADMAP APPROVED: YES
 DELIVERY ROADMAP PATH:  docs/planning/DELIVERY_ROADMAP.md
 DELIVERY ROADMAP APPROVAL DATE: 2026-09-15
 MILESTONE COUNT:        7 (MS-001 through MS-007)
-MILESTONES CLOSED:      2 (MS-001, MS-002)
-MILESTONES REMAINING:   5 (MS-003 through MS-007)
-WORK PACKAGES CLOSED:   2 (WP-001 — CLOSED / PASS WITH NON-BLOCKING FINDINGS; WP-002 — CLOSED / PASS)
-WORK PACKAGES REMAINING: 5 (WP-003 through WP-007 — NOT YET AUTHORIZED)
+MILESTONES CLOSED:      3 (MS-001, MS-002, MS-003)
+MILESTONES REMAINING:   4 (MS-004 through MS-007)
+WORK PACKAGES CLOSED:   3 (WP-001 — CLOSED / PASS WITH NON-BLOCKING FINDINGS; WP-002 — CLOSED / PASS; WP-003 — CLOSED / PASS WITH NON-BLOCKING FINDINGS)
+WORK PACKAGES REMAINING: 4 (WP-004 through WP-007 — NOT YET AUTHORIZED)
 WP-001 CONTRACT BASELINE: a0d6672145a14dd466d59541abc6cd41e56201f1
 WP-001 IMPLEMENTATION COMMIT: 45fa8b7cadbed42db4df9f574eb726c40154cb09
 WP-001 S11 VERDICT:     PASS WITH NON-BLOCKING FINDINGS
@@ -46,14 +46,29 @@ WP-002 IMPLEMENTATION HEAD: 6d0027ad78aa3536f06f2ef60ca63c3efcbee3ce
 WP-002 S11 VERDICT:     PASS
 WP-002 IMPLEMENTATION FINDINGS: Schema mismatches discovered and corrected during S10 (text→boolean for user.email_verified and user.banned; text/timestamp→integer/bigint for rateLimit.count and rateLimit.last_request). Corrected within WP-002 contract scope. Migration 0001 is versioned; migration history prevents normal duplicate application; DEV and TEST at expected migration state; Production untouched.
 WP-002 ARCHITECTURE DIVERGENCE: NONE
+WP-003 CONTRACT BASELINE: 2b8e56dcb67e4282e25fd07d1a61136412800625
+WP-003 IMPLEMENTATION HEAD: 35f80b38ddba9e68ef1ae417ade869f9e424c659
+WP-003 S11 VERDICT:     PASS WITH NON-BLOCKING FINDINGS
+WP-003 IMPLEMENTATION FINDINGS (RESOLVED DEFECTS):
+  - /admin/login route-group redirect defect (layout guarded /admin/login causing infinite redirect loop) — RESOLVED via route-group restructure (app/admin/(protected)/)
+  - getPrincipal() request-header/session propagation defect (passed empty Headers() to auth.api.getSession, discarding session cookie) — RESOLVED via next/headers integration (owner-authorized protected auth file change: lib/server/auth/authorization.ts)
+  - Server Component event-handler defect (inline onChange on <select> in Server Component) — RESOLVED via GET form submission
+  - Browser login session-cookie propagation defect (loginAction Server Action called auth.api.signInUsername directly, bypassing HTTP Set-Cookie) — RESOLVED via Better Auth client-side API (authClient.signIn.username from lib/auth-client.ts)
+WP-003 AUTHORIZED PROTECTED AUTH CHANGE: lib/server/auth/authorization.ts ONLY (next/headers session propagation — owner-authorized cross-WP corrective patch)
+WP-003 NON-BLOCKING FINDINGS:
+  1. 10 authorized-but-unused direct dependencies remain (react-hook-form, @hookform/resolvers, class-variance-authority, clsx, tailwind-merge, @radix-ui/react-slot, @radix-ui/react-label, @radix-ui/react-select, @radix-ui/react-dialog, lucide-react) — NON-BLOCKING TECHNICAL DEBT
+  2. Previous S11 verification cleared DEV rateLimit (test-isolation/governance finding) — no application impact; final verification used TEST-only
+  3. Initial DRAFT DB snapshot in final browser evidence run not captured at creation time due to verification-script parameterization error — NON-BLOCKING EVIDENCE LIMITATION; UI showed Brouillon; runtime was TEST; committed integration test verifies DRAFT + published_at NULL; same offer later confirmed in TEST DB through lifecycle
+WP-003 ARCHITECTURE DIVERGENCE: NONE
+WP-003 EXISTING AUTH INTEGRATION GAP: RESOLVED
 CANONICAL BRANCH:       dev (development); main = release, untouched
-CANONICAL HEAD:         6d0027ad78aa3536f06f2ef60ca63c3efcbee3ce (dev)
+CANONICAL HEAD:         35f80b38ddba9e68ef1ae417ade869f9e424c659 (dev)
 REMOTE:                 configured (origin → git@github.com-aise-alexkanga-jourdain:alexkanga/jourdain.git)
-REMOTE HEAD:            6d0027ad78aa3536f06f2ef60ca63c3efcbee3ce (dev)
+REMOTE HEAD:            35f80b38ddba9e68ef1ae417ade869f9e424c659 (dev)
 LOCAL = REMOTE:         YES (dev)
 MAIN HEAD:              0bc77a783c8efc1ba6056c67b5a5e290dd26ee4d (unchanged since branch cutover)
 AISE SOURCE COMMIT:     2991df51c1fa692f892452c361081c626f028cd0
-COMPLETED COMPONENTS:   S0, S1, S2, S3, S4, S5, S6, S7, S8, S9 (WP-001), S10 (WP-001), S11 (WP-001), S10 (WP-002), S11 (WP-002) installed and canonical
+COMPLETED COMPONENTS:   S0, S1, S2, S3, S4, S5, S6, S7, S8, S9 (WP-001), S10 (WP-001), S11 (WP-001), S9 (WP-002), S10 (WP-002), S11 (WP-002), S9 (WP-003), S10 (WP-003), S11 (WP-003) installed and canonical
 PRODUCT DISCOVERY:      CLOSED PASS — CHARTER APPROVED (S4)
 PRODUCT REQUIREMENTS:   CLOSED PASS — PRODUCT REQUIREMENTS APPROVED (S5)
 TECHNICAL SPECIFICATION: CLOSED PASS — TECHNICAL SPECIFICATION APPROVED (S6)
@@ -61,10 +76,11 @@ PROJECT MANIFEST/ADR:   CLOSED PASS — PROJECT MANIFEST AND ADRS APPROVED (S7)
 DELIVERY ROADMAP:        CLOSED PASS — DELIVERY ROADMAP APPROVED (S8)
 MS-001 APPLICATION FOUNDATION: CLOSED PASS — WP-001 CLOSED PASS WITH NON-BLOCKING FINDINGS (S9+S10+S11)
 MS-002 DATABASE + AUTH FOUNDATION: CLOSED PASS — WP-002 CLOSED PASS (S9+S10+S11)
-IMPLEMENTATION:         IN PROGRESS (MS-001 closed; MS-002 closed; MS-003 not yet authorized)
+MS-003 ADMIN OFFER MANAGEMENT: CLOSED PASS WITH NON-BLOCKING FINDINGS — WP-003 CLOSED PASS WITH NON-BLOCKING FINDINGS (S9+S10+S11+remediation+re-verification)
+IMPLEMENTATION:         IN PROGRESS (MS-001 closed; MS-002 closed; MS-003 closed; MS-004 not yet authorized)
 DEFERRED DECISIONS:     Charter-level: D1 (GDPR details — future), D2 (migration scope — only if needed), D3 (data residency — future). S5-level: DR-030/040 (full audit log — future), DR-050 (admin UI — future), DR-051 (SUPER_ADMIN role — future), DR-160 (GDPR — future), DR-170 (data residency — future). All explicitly non-blocking for V1.
 NEXT AUTHORIZED:        NONE until OWNER GO
-NEXT RECOMMENDED:       S9 — prepare WP-003 (next work package per DELIVERY_ROADMAP, MS-003)
+NEXT RECOMMENDED:       AISE UNIVERSAL PATCH (Remote Runtime Cost / Quota Safety — Hobby-Safe / Quota-Safe), then S9 — prepare WP-004 (Public Job Portal, MS-004)
 
 ## What exists
 
