@@ -8,8 +8,8 @@ control plane) to understand where the project stands.
 ## Current phase
 
 PROJECT:                JOURDAIN EMPLOI
-AISE PHASE:             WP-004 / MS-004 CLOSED — ready for S9 WP-005 preparation (NOT YET AUTHORIZED)
-STATUS:                 MS-004 / WP-004 CLOSED / PASS. Public Job Portal delivered. S0 v0.2 active. Ready for WP-005 (E2E Test Infrastructure, MS-005) preparation — NOT YET AUTHORIZED
+AISE PHASE:             WP-005 / MS-005 CLOSED — ready for S9 WP-006 preparation (NOT YET AUTHORIZED)
+STATUS:                 MS-005 / WP-005 CLOSED / PASS. E2E Test Infrastructure delivered. S0 v0.2 active. Ready for WP-006 (Environments + CI/CD, MS-006) preparation — NOT YET AUTHORIZED
 CANONICAL RELEASE BRANCH: main
 CANONICAL DEVELOPMENT BRANCH: dev
 ACTIVE DEVELOPMENT BRANCH: dev
@@ -33,10 +33,10 @@ DELIVERY ROADMAP APPROVED: YES
 DELIVERY ROADMAP PATH:  docs/planning/DELIVERY_ROADMAP.md
 DELIVERY ROADMAP APPROVAL DATE: 2026-09-15
 MILESTONE COUNT:        7 (MS-001 through MS-007)
-MILESTONES CLOSED:      4 (MS-001, MS-002, MS-003, MS-004)
-MILESTONES REMAINING:   3 (MS-005 through MS-007)
-WORK PACKAGES CLOSED:   4 (WP-001 — CLOSED / PASS WITH NON-BLOCKING FINDINGS; WP-002 — CLOSED / PASS; WP-003 — CLOSED / PASS WITH NON-BLOCKING FINDINGS; WP-004 — CLOSED / PASS)
-WORK PACKAGES REMAINING: 3 (WP-005 through WP-007 — NOT YET AUTHORIZED)
+MILESTONES CLOSED:      5 (MS-001, MS-002, MS-003, MS-004, MS-005)
+MILESTONES REMAINING:   2 (MS-006 through MS-007)
+WORK PACKAGES CLOSED:   5 (WP-001 — CLOSED / PASS WITH NON-BLOCKING FINDINGS; WP-002 — CLOSED / PASS; WP-003 — CLOSED / PASS WITH NON-BLOCKING FINDINGS; WP-004 — CLOSED / PASS; WP-005 — CLOSED / PASS)
+WORK PACKAGES REMAINING: 2 (WP-006 through WP-007 — NOT YET AUTHORIZED)
 WP-001 CONTRACT BASELINE: a0d6672145a14dd466d59541abc6cd41e56201f1
 WP-001 IMPLEMENTATION COMMIT: 45fa8b7cadbed42db4df9f574eb726c40154cb09
 WP-001 S11 VERDICT:     PASS WITH NON-BLOCKING FINDINGS
@@ -85,30 +85,67 @@ WP-004 SECURITY STATE (FINAL, RECORDED):
 WP-004 NON-BLOCKING HISTORICAL FINDING:
   - S10 initial test-count reporting discrepancy: S10 reported 59 unit + 43 integration = 102; actual pre-security-remediation inventory was 58 unit/validation + 17 offers integration + 9 auth regression + 18 public integration = 102. After security tests added: 149 total. Classification: NON-BLOCKING REPORTING FINDING. Application impact: NONE. Do NOT reopen WP-004.
 WP-004 ARCHITECTURE DIVERGENCE: NONE
-WP-004 MAJOR DELIVERED CAPABILITIES:
-  - anonymous public job portal (no authentication required)
-  - root PUBLISHED offers list at /
-  - UUID detail route at /offres/[id]
-  - server-side PUBLISHED-only enforcement (read-only public service: lib/server/services/public-offers.ts)
-  - title/company/location search (?q=)
-  - server-side pagination (?page=)
-  - deterministic published_at DESC, created_at DESC ordering
-  - safe Tiptap rendering (deterministic JSON-to-React, no dangerouslySetInnerHTML)
-  - safe application_url/source_url scheme enforcement (http/https only, save + render)
-  - application_email mailto handling
-  - sitemap.ts
-  - robots.ts
-  - per-page metadata
-  - no candidate workflow
-  - no public authentication requirement
-  - old placeholder app/page.tsx REMOVED (replaced by app/(public)/page.tsx)
+WP-005 CONTRACT BASELINE: b18db2dd06f0c4db4917b64f0230474778fb7927
+WP-005 IMPLEMENTATION HEAD: 29ce2d80a4ea7b728287040d8686958a60254697
+WP-005 S11 VERDICT:     PASS
+WP-005 INITIAL FULL S11: COMPLETED (BLOCKING FINDING IDENTIFIED: E2E_BASE_URL bypass)
+WP-005 S10 REMEDIATION: COMPLETED (E2E_BASE_URL guard bypass closed + logout test corrected)
+WP-005 TARGETED FINAL S11: PASS
+WP-005 IMPLEMENTATION FINDINGS (RESOLVED DEFECTS BEFORE CLOSURE):
+  - E2E_BASE_URL shell/process-env bypass: RESOLVED via canonical resolveAuthorizedE2EBaseUrl() in tests/e2e/helpers/env.ts — both playwright.config.ts AND runner.ts use the SAME resolver with deterministic env precedence (process.env > .env.local > default http://127.0.0.1:3100). Unauthorized E2E_BASE_URL fails before browser launch (fail-closed). Verified via explicit bypass proof.
+  - Logout test false positive (S10): RESOLVED — root cause was BETTER_AUTH_URL mismatch (stale fallback http://127.0.0.1:3000 vs actual server http://127.0.0.1:3100). Better Auth rejected signOut requests from mismatched origin. Fixed by passing resolved baseUrl to buildChildEnv (BETTER_AUTH_URL = http://127.0.0.1:3100). Incorrect test.fail removed; replaced with regular Playwright security test that PASSES. Independently verified 3/3 from clean browser contexts.
+WP-005 SECURITY STATE (FINAL, RECORDED):
+  - NO STATE MUTATION BEFORE TARGET CERTIFICATION: PASS (Phase A read-only invariant enforced)
+  - PHASE A READ-ONLY: PASS (env.ts contains no mutation keywords; only SELECT queries)
+  - TEST FINGERPRINT: PASS (E2E_EXPECTED_TEST_DATABASE_HOST mandatory; no .env.example fallback; no inference from TEST_DATABASE_URL)
+  - PARENT DATABASE_URL CONTAMINATION PROTECTION: PASS (curated child env allowlist; parent DATABASE_URL not forwarded)
+  - CHILD DATABASE_URL = VERIFIED TEST: PASS
+  - UNKNOWN DB: REFUSED (TEST_FINGERPRINT_MISMATCH)
+  - DEV DB: REFUSED (TEST_EQUALS_DEV)
+  - PRODUCTION DB: REFUSED (TEST_EQUALS_PROD)
+  - SQLITE FALLBACK: REFUSED (TEST_IS_SQLITE_FALLBACK)
+  - REMOTE E2E DEFAULT: REFUSED (REMOTE_BASE_URL_NOT_AUTHORIZED)
+  - SHELL E2E_BASE_URL REMOTE BYPASS: RESOLVED (canonical resolver; fail-closed)
+  - ENV.LOCAL REMOTE BYPASS: RESOLVED (same resolver)
+  - MISMATCHED REMOTE OVERRIDE: REFUSED (E2E_BASE_URL must match E2E_REMOTE_BASE_URL)
+  - DECEPTIVE LOCALHOST: REFUSED (localhost.example.com, localhost@evil.example, etc.)
+  - PLAYWRIGHT / RUNNER TARGET PARITY: PASS (both use resolveAuthorizedE2EBaseUrl)
+  - BETTER_AUTH_URL / E2E SERVER PARITY: PASS (http://127.0.0.1:3100)
+  - LOGOUT SESSION INVALIDATION: PASS (independently verified 3/3 + full-suite regression)
+  - OPEN BLOCKING SECURITY FINDINGS: NONE
+WP-005 NON-BLOCKING FINDINGS:
+  1. S10/S11 test-count reporting discrepancies (S10 overcounted guards by 1 due to counting test.skip as separate test). Final canonical E2E count: 101 (via `playwright test --list`). Application impact: NONE. NON-BLOCKING DOCUMENTATION FINDING.
+  2. UI copy: "Republicaliser" in components/admin/LifecycleButtons.tsx (expected French: "Republier"). NON-BLOCKING PRODUCT COPY FINDING. Not fixed per §32 NO PRODUCT REDESIGN.
+WP-005 ARCHITECTURE DIVERGENCE: NONE
+WP-005 MAJOR DELIVERED CAPABILITIES:
+  - Playwright E2E infrastructure (Chromium-only, single worker, 0 retries)
+  - local Next.js runtime orchestration (build + spawn + readiness + shutdown)
+  - TEST database positive fingerprint verification (E2E_EXPECTED_TEST_DATABASE_HOST)
+  - fail-closed database-target guards (missing/wrong fingerprint, DEV, PROD, SQLite, unknown, unsupported scheme, unreachable)
+  - parent DATABASE_URL contamination protection (curated child env allowlist)
+  - no-mutation-before-target-certification invariant (Phase A read-only)
+  - deterministic E2E fixtures and cleanup (E2E_ title marker, exact UUID cleanup, orphan recovery)
+  - ADMIN critical 15-step journey (per S6 §18.4)
+  - Fantomas verification (login + ADMIN capability inheritance)
+  - public portal browser coverage (8 spec files: root, detail, search, pagination, not-found, seo, tiptap-safety, url-safety)
+  - security E2E (5 spec files: admin-route-guard, hidden-offer, tiptap-href, unsafe-url, logout-invalidates)
+  - axe-core accessibility verification (public + admin pages)
+  - responsive/mobile verification (375x667 viewport)
+  - failure screenshots/traces (on failure only; video off)
+  - remote E2E refusal by default (loopback only; 3-variable override semantics)
+  - canonical base-URL authorization (resolveAuthorizedE2EBaseUrl — one resolver for Playwright + runner)
+  - logout session invalidation coverage (regular Playwright test, independently verified 3/3)
+  - 101 E2E tests total: 18 spec files (guards=48, public=31, admin=1, security=14, fantomas=2, accessibility=3, responsive=2)
+  - existing 149 Vitest tests preserved (vitest.config.ts excludes tests/e2e/)
+  - Implemented at 29ce2d8, verified PASS (initial S11 + S10 remediation + targeted final S11 PASS)
 CANONICAL BRANCH:       dev (development); main = release, untouched
-CANONICAL HEAD:         a7b3833d6c1af4edb90cddd07c27964d5fcbf396 (dev, after WP-004 merge + closure commit)
+CANONICAL HEAD:         29ce2d80a4ea7b728287040d8686958a60254697 (dev, after WP-005 merge + closure commit)
 REMOTE:                 configured (origin → git@github.com-aise-alexkanga-jourdain:alexkanga/jourdain.git)
-REMOTE HEAD:            a7b3833d6c1af4edb90cddd07c27964d5fcbf396 (dev)
+REMOTE HEAD:            29ce2d80a4ea7b728287040d8686958a60254697 (dev)
 LOCAL = REMOTE:         YES (dev)
 MAIN HEAD:              0bc77a783c8efc1ba6056c67b5a5e290dd26ee4d (unchanged since branch cutover)
 WP-004 WORK BRANCH RETAINED: wp/004-public-job-portal (at a7b3833d6c1af4edb90cddd07c27964d5fcbf396) — NOT deleted
+WP-005 WORK BRANCH RETAINED: wp/005-e2e-test-infrastructure (at 29ce2d80a4ea7b728287040d8686958a60254697) — NOT deleted
 AISE S0 VERSION:               0.2
 AISE QUOTA-SAFETY PATCH:        ACCEPTED / MERGED
 AISE QUOTA-SAFETY PATCH COMMIT: f3f2bdcc233fe28cca01b18090aca0ee96561f61
@@ -138,7 +175,7 @@ JOURDAIN INTENDED QUOTA-SAFETY EXECUTION POLICY (project-specific overlay):
   DEV/INTEGRATION PREVIEW: may later be enabled for limited human validation
   MAIN/PRODUCTION:         explicit release authorization only
   NOTE: Vercel NOT configured now. MS-006 remains the deployment milestone.
-COMPLETED COMPONENTS:   S0, S1, S2, S3, S4, S5, S6, S7, S8, S9 (WP-001), S10 (WP-001), S11 (WP-001), S9 (WP-002), S10 (WP-002), S11 (WP-002), S9 (WP-003), S10 (WP-003), S11 (WP-003), S9 (WP-004), S10 (WP-004), S11 (WP-004) installed and canonical
+COMPLETED COMPONENTS:   S0, S1, S2, S3, S4, S5, S6, S7, S8, S9 (WP-001), S10 (WP-001), S11 (WP-001), S9 (WP-002), S10 (WP-002), S11 (WP-002), S9 (WP-003), S10 (WP-003), S11 (WP-003), S9 (WP-004), S10 (WP-004), S11 (WP-004), S9 (WP-005), S10 (WP-005), S11 (WP-005) installed and canonical
 PRODUCT DISCOVERY:      CLOSED PASS — CHARTER APPROVED (S4)
 PRODUCT REQUIREMENTS:   CLOSED PASS — PRODUCT REQUIREMENTS APPROVED (S5)
 TECHNICAL SPECIFICATION: CLOSED PASS — TECHNICAL SPECIFICATION APPROVED (S6)
@@ -148,12 +185,13 @@ MS-001 APPLICATION FOUNDATION: CLOSED PASS — WP-001 CLOSED PASS WITH NON-BLOCK
 MS-002 DATABASE + AUTH FOUNDATION: CLOSED PASS — WP-002 CLOSED PASS (S9+S10+S11)
 MS-003 ADMIN OFFER MANAGEMENT: CLOSED PASS WITH NON-BLOCKING FINDINGS — WP-003 CLOSED PASS WITH NON-BLOCKING FINDINGS (S9+S10+S11+remediation+re-verification)
 MS-004 PUBLIC JOB PORTAL: CLOSED PASS — WP-004 CLOSED PASS (S9+S10+S11+security remediation+targeted security re-verification)
-IMPLEMENTATION:         IN PROGRESS (MS-001 closed; MS-002 closed; MS-003 closed; MS-004 closed; MS-005 not yet authorized)
+MS-005 E2E INTEGRATION + HARDENING: CLOSED PASS — WP-005 CLOSED PASS (S9+S10+S11+S10 remediation+targeted final S11)
+IMPLEMENTATION:         IN PROGRESS (MS-001 closed; MS-002 closed; MS-003 closed; MS-004 closed; MS-005 closed; MS-006 not yet authorized)
 DEFERRED DECISIONS:     Charter-level: D1 (GDPR details — future), D2 (migration scope — only if needed), D3 (data residency — future). S5-level: DR-030/040 (full audit log — future), DR-050 (admin UI — future), DR-051 (SUPER_ADMIN role — future), DR-160 (GDPR — future), DR-170 (data residency — future). All explicitly non-blocking for V1.
 NEXT AUTHORIZED:        NONE until OWNER GO
-NEXT RECOMMENDED:       S9 — prepare WP-005 (E2E Test Infrastructure, MS-005) — Playwright infrastructure, NOT remote E2E, NOT CI E2E pipeline (per quota-safety doctrine)
-WP-005 / MS-005 BOUNDARY: Do NOT install Playwright project infrastructure now. Do NOT create CI E2E pipeline now. Do NOT configure remote E2E. MS-005 remains the next separate milestone.
-MS-006 BOUNDARY: Do NOT configure Vercel, production domain, Preview deployment, production environment variables, or CI/CD deployment. MS-006 remains separate.
+NEXT RECOMMENDED:       S9 — prepare WP-006 (Environments + CI/CD, MS-006) — Vercel + Neon configuration, GitHub Actions CI, Preview deployment. MS-006 must preserve AISE v0.2 quota-safety and Vercel Hobby constraints.
+MS-006 BOUNDARY: Do NOT configure Vercel, production domain, Preview deployment, production environment variables, or CI/CD deployment until OWNER authorizes MS-006. MS-006 remains separate.
+S12 BOUNDARY: Do NOT start S12 (global release-readiness). S12 remains separate.
 
 ## What exists
 
@@ -162,6 +200,79 @@ MS-006 BOUNDARY: Do NOT configure Vercel, production domain, Preview deployment,
 - AISE manifest: `docs/engineering/AISE_MANIFEST.md`.
 - This project state file: `docs/planning/PROJECT_STATE.md`.
 - Minimal README: `README.md`.
+
+## What exists now (after MS-005 / WP-005 closure)
+
+- **WP-005 E2E Test Infrastructure**:
+  - Playwright E2E infrastructure with Chromium-only browser matrix,
+    single worker, 0 retries, screenshot on failure, trace on first
+    retry, video off (per ADR-0008, TD-024, AISE S0 v0.2 §26
+    quota-safety).
+  - Local Next.js runtime orchestration via tests/e2e/helpers/runner.ts:
+    build → spawn `next start --port 3100` with curated child env →
+    readiness probe → run Playwright specs → shutdown.
+  - Canonical base-URL resolver: `resolveAuthorizedE2EBaseUrl()` in
+    tests/e2e/helpers/env.ts — used by BOTH playwright.config.ts AND
+    runner.ts. Deterministic env precedence: process.env > .env.local
+    > default (http://127.0.0.1:3100). Fail-closed: unauthorized URL
+    fails before browser launch.
+  - Phase A read-only target certification (NO STATE MUTATION BEFORE
+    TARGET CERTIFICATION): parseEnvLocal → URL type/scheme validation
+    → positive TEST fingerprint comparison (E2E_EXPECTED_TEST_DATABASE_HOST)
+    → refuse-non-TEST guards (DEV, PROD, SQLite, unknown) → read-only
+    connectivity probe → read-only identity probe → construct curated
+    child env (no inherited parent DATABASE_URL).
+  - Parent DATABASE_URL contamination protection: buildChildEnv()
+    constructs a curated allowlist (DATABASE_URL, BETTER_AUTH_SECRET,
+    BETTER_AUTH_URL, INITIAL_ADMIN_*, FANTOMAS_*, NEXT_PUBLIC_SITE_URL,
+    NODE_ENV, PATH, HOME). Parent DATABASE_URL (file: or postgresql://)
+    is NOT forwarded. Child receives DATABASE_URL = positively verified
+    TEST_DATABASE_URL.
+  - BETTER_AUTH_URL = http://127.0.0.1:3100 (matches actual E2E server
+    URL; no stale localhost:3000).
+  - Deterministic E2E fixtures: tests/e2e/helpers/fixtures.ts — direct
+    Neon SQL helpers with E2E_<run-id>_<scenario> title marker (in the
+    `title` business field, NOT replacing canonical UUID `id`). Normal
+    cleanup: delete by exact UUID. Orphan recovery: find by title prefix
+    → collect UUIDs → delete exact UUIDs. No broad unrestricted DELETE.
+  - TEST-only rateLimit cleanup (AFTER Phase A certification). No DEV
+    rateLimit touched. No global rate limiter disabling.
+  - 101 E2E tests across 18 spec files:
+    - guards.spec.ts (48): 12 guard self-tests (AC-030 through AC-037d)
+      + 5 §19 bypass regression + 17 §13 A-L additional base URL guard
+      + 14 DB target certification + parent contamination + mutation
+      ordering + real TEST DB probe.
+    - public-*.spec.ts (31): root, detail, search, pagination,
+      not-found, seo, tiptap-safety, url-safety.
+    - admin-critical-journey.spec.ts (1): 15-step journey per S6 §18.4.
+    - security-*.spec.ts (14): admin-route-guard, hidden-offer,
+      tiptap-href, unsafe-url, logout-invalidates (regular test, PASS).
+    - fantomas-journey.spec.ts (2): login + ADMIN capability inheritance.
+    - accessibility.spec.ts (3): axe-core scan (public root, detail,
+      admin login).
+    - responsive.spec.ts (2): mobile viewport 375x667.
+  - Existing 149 Vitest tests preserved (vitest.config.ts excludes
+    tests/e2e/). Test command separation: `pnpm test` (Vitest) ≠
+    `pnpm test:e2e` (Playwright).
+  - 0 test.fail. 1 conditional test.skip (guards.spec.ts AC-032 — does
+    NOT trigger during authorized TEST run). 0 test.fixme.
+  - Failure artifacts: screenshot on failure, trace on first retry,
+    video off. .gitignore covers tests/e2e/.artifacts/.
+  - Remote E2E refused by default (loopback only). 3-variable override
+    semantics: E2E_ALLOW_REMOTE=1 + E2E_REMOTE_BASE_URL +
+    E2E_REMOTE_AUTHORIZATION_REF (all three required, AND
+    E2E_BASE_URL must match E2E_REMOTE_BASE_URL).
+  - No CI workflow (MS-006 scope). No Vercel (MS-006 scope).
+  - Implemented at 29ce2d8, verified PASS (initial S11 BLOCKING finding
+    E2E_BASE_URL bypass → S10 remediation → targeted final S11 PASS).
+
+## What does NOT exist (intentional, per current scope)
+
+- No Vercel project or environment configured (future — MS-006).
+- No GitHub Actions CI (future — MS-006).
+- No WP-006 work or contract preparation (NOT YET AUTHORIZED).
+- No S12 (global release-readiness — future).
+- No changes to Neon Production / `main` branch.
 
 ## What exists now (after MS-004 / WP-004 closure)
 
@@ -204,11 +315,10 @@ MS-006 BOUNDARY: Do NOT configure Vercel, production domain, Preview deployment,
 
 ## What does NOT exist (intentional, per current scope)
 
-- No Playwright (future — MS-005).
 - No Vercel project or environment configured (future — MS-006).
-- No GitHub Actions CI (future).
-- No WP-005 work or contract preparation (NOT YET AUTHORIZED).
-- No S12 — this closure only.
+- No GitHub Actions CI (future — MS-006).
+- No WP-006 work or contract preparation (NOT YET AUTHORIZED).
+- No S12 (global release-readiness — future).
 - No changes to Neon Production / `main` branch.
 
 ## What does NOT exist (intentional, per S3 / S4 / S5 / S6 / S7 boundaries)
@@ -469,25 +579,21 @@ MS-001 / WP-001 is CLOSED / PASS WITH NON-BLOCKING FINDINGS.
 MS-002 / WP-002 is CLOSED / PASS (owner-accepted S11 verdict).
 MS-003 / WP-003 is CLOSED / PASS WITH NON-BLOCKING FINDINGS.
 MS-004 / WP-004 is CLOSED / PASS (owner-accepted full S11 verdict + targeted security S11).
+MS-005 / WP-005 is CLOSED / PASS (owner-accepted initial S11 + S10 remediation + targeted final S11).
 
-WP-005 / MS-005 has NOT started. S9 for WP-005 begins only after
-explicit OWNER GO. No WP-005 contract preparation is authorized at
-this time. Per quota-safety doctrine: do NOT install Playwright project
-infrastructure, do NOT create CI E2E pipeline, do NOT configure remote
-E2E in this operation — all deferred to MS-005 boundary.
-
-MS-006 (Vercel deployment) has NOT started. Do NOT configure Vercel,
-production domain, Preview deployment, production environment
-variables, or CI/CD deployment in this operation.
+WP-006 / MS-006 has NOT started. S9 for WP-006 begins only after
+explicit OWNER GO. No WP-006 contract preparation is authorized at
+this time. MS-006 (Environments + CI/CD) must preserve AISE v0.2
+quota-safety and Vercel Hobby constraints.
 
 S12 has NOT started.
 
 Branch policy preserved: `main` = release / future Production branch
 (untouched); `dev` = canonical development integration branch. Direct
 development on `main` remains DISALLOWED. `dev` was NOT merged into
-`main` during this closure. Work branch `wp/004-public-job-portal`
-retained (NOT deleted) at a7b3833d6c1af4edb90cddd07c27964d5fcbf396.
+`main` during this closure. Work branch `wp/005-e2e-test-infrastructure`
+retained (NOT deleted) at 29ce2d80a4ea7b728287040d8686958a60254697.
 
-NEXT RECOMMENDED COMPONENT: S9 — prepare WP-005 (E2E Test Infrastructure,
-next work package per DELIVERY_ROADMAP, MS-005)
+NEXT RECOMMENDED COMPONENT: S9 — prepare WP-006 (Environments + CI/CD,
+next work package per DELIVERY_ROADMAP, MS-006)
 NEXT ACTION: OWNER GO REQUIRED
