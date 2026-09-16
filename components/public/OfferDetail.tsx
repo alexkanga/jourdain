@@ -5,6 +5,11 @@ import type { PublicOfferRow } from "@/lib/server/services/public-offers";
  * OfferDetail — public offer detail page content.
  * Per S5 §10.2: all available fields, company as "Entreprise non communiquée" if absent,
  * application modalities as informational block (no Apply button), source block if present.
+ *
+ * URL SAFETY: application_url and source_url are validated at render time
+ * (defense in depth). Only http/https URLs are rendered as clickable links.
+ * Unsafe values (javascript:, data:, vbscript:, file:, etc.) are silently
+ * omitted — no clickable <a> is rendered, no unsafe href is emitted in markup.
  */
 
 function formatDate(value: string | Date | null | undefined): string {
@@ -18,10 +23,28 @@ function formatDate(value: string | Date | null | undefined): string {
   });
 }
 
+/**
+ * Render-time URL safety check. Returns a safe http/https URL or null.
+ * Defense in depth: even if save-time validation is bypassed (legacy data),
+ * unsafe schemes are NOT rendered as clickable links.
+ */
+function safeHttpUrl(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith("http://") || lower.startsWith("https://")) {
+    return trimmed;
+  }
+  return null;
+}
+
 export function OfferDetail({ offer }: { offer: PublicOfferRow }) {
+  const safeAppUrl = safeHttpUrl(offer.applicationUrl);
+  const safeSourceUrl = safeHttpUrl(offer.sourceUrl);
   const hasApplicationInfo =
-    offer.applicationModalities || offer.applicationEmail || offer.applicationUrl;
-  const hasSourceInfo = offer.sourceName || offer.sourceUrl;
+    offer.applicationModalities || offer.applicationEmail || safeAppUrl;
+  const hasSourceInfo = offer.sourceName || safeSourceUrl;
 
   return (
     <article className="max-w-3xl">
@@ -67,10 +90,10 @@ export function OfferDetail({ offer }: { offer: PublicOfferRow }) {
                 </a>
               </p>
             )}
-            {offer.applicationUrl && (
+            {safeAppUrl && (
               <p>
                 <a
-                  href={offer.applicationUrl}
+                  href={safeAppUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:text-blue-800"
@@ -86,9 +109,9 @@ export function OfferDetail({ offer }: { offer: PublicOfferRow }) {
       {hasSourceInfo && (
         <div className="mt-4 text-sm text-gray-500">
           {offer.sourceName && <span>Source : {offer.sourceName}</span>}
-          {offer.sourceUrl && (
+          {safeSourceUrl && (
             <a
-              href={offer.sourceUrl}
+              href={safeSourceUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="ml-2 text-blue-600 hover:text-blue-800"
