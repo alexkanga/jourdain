@@ -41,7 +41,7 @@ This WP builds entirely on the verified foundations from WP-002 (Database + Auth
 |---|---|---|---|
 | FR-001 (admin login) | MUST | COMPLETES | Login UI page (Better Auth route handler exists from WP-002; WP-003 adds the styled login form + loginAction Server Action) |
 | FR-002 (admin logout) | MUST | PRIMARY | logoutAction Server Action |
-| FR-003 (back-office denied to unauthenticated) | MUST | PRIMARY | middleware.ts (NEW in WP-003) protects /admin/* — first line of defense (authentication only) |
+| FR-003 (back-office denied to unauthenticated) | MUST | PRIMARY | middleware.ts (NEW in WP-003, UX/redirect only) + admin layout guard (server-side authentication) + Server Action requireCapability (server-side authorization). Server is the authority; middleware bypass must NOT grant access. |
 | FR-010 (admin offer list view) | MUST | PRIMARY | app/admin/offres/page.tsx (Server Component) |
 | FR-011 (admin list status visibility) | MUST | PRIMARY | StatusBadge in admin list |
 | FR-012 (admin list status filter — MUST) | MUST | PRIMARY | URL searchParams ?status=… |
@@ -77,12 +77,12 @@ This WP builds entirely on the verified foundations from WP-002 (Database + Auth
 | BR-063 (no expiration_date) | MUST | PRIMARY | No expiration_date field (schema already correct from WP-002) |
 | BR-080 (URL/email validation) | MUST | PRIMARY | Zod validation for application_email, application_url, source_url when provided |
 | PERM-002 (ADMIN full offer lifecycle) | MUST | PRIMARY | All lifecycle actions authorized for ADMIN |
-| PERM-003 (back-office restricted) | MUST | PRIMARY | middleware.ts + layout guard enforce authentication |
+| PERM-003 (back-office restricted) | MUST | PRIMARY | Server-side: admin layout guard (getPrincipal) + Server Action requireCapability. middleware.ts provides UX/redirect only (not the authority). |
 | PERM-004 (Fantomas inherits ADMIN) | MUST | PRIMARY | Fantomas inherits all ADMIN capabilities; can() abstraction already enforces this |
 | NFR-040 (French only — admin UI strings) | MUST | PRIMARY | All admin UI strings in French |
 | NFR-050 (minimal audit — created_at, updated_at, published_at) | MUST | PRIMARY | System-managed fields set correctly on each mutation |
 | NFR-060 (offer integrity — transitions preserve content) | MUST | PRIMARY | Lifecycle transitions preserve content fields; only status + updated_at change |
-| NFR-012 (session protection) | MUST | SECONDARY | Better Auth httpOnly cookie (from WP-002); WP-003 middleware enforces /admin/* session check |
+| NFR-012 (session protection) | MUST | SECONDARY | Better Auth httpOnly cookie (from WP-002); WP-003 admin layout guard + Server Action requireCapability enforce server-side session check (middleware.ts provides UX/redirect only, not the authority) |
 
 **MILESTONE REQUIREMENTS NOT IN THIS WP:**
 
@@ -118,16 +118,83 @@ All covered requirements are traced to MS-003 in DELIVERY_ROADMAP §7 (line 208�
 
 - `app/admin/login/page.tsx` — styled login form (username + password), French labels, error feedback for invalid credentials, redirect to `/admin/offres` on success (FR-001)
 - `loginAction` Server Action — calls `auth.api.signInUsername({ body: { username, password } })` server-side; returns `{ ok: boolean, error?: string }`; on success redirect to `/admin/offres`; on failure re-render login page with error (no information leak about which field was wrong)
-- `app/admin/layout.tsx` — admin layout with auth guard (double-check session via `getPrincipal()`; if null → redirect to `/admin/login`); renders logout button
+- `app/admin/layout.tsx` — admin layout with **server-side auth guard** (validate authenticated session via `getPrincipal()`; if null → redirect to `/admin/login`). This is the real server-side authentication check for the admin area (defense in depth on top of middleware's UX-only early redirect). Renders logout button.
 - `logoutAction` Server Action — calls `auth.api.signOut({ headers })`; redirects to `/admin/login` (FR-002)
 - `app/admin/page.tsx` — redirect to `/admin/offres`
 
-### Server-Side Access Control
+### Server-Side Access Control (security authority is server-side; middleware is UX/redirect only)
 
-- `middleware.ts` (root-level, NEW) — protects `/admin/*` routes; calls Better Auth session check; if no valid session → redirect to `/admin/login`. This is the first line of defense (authentication only — no capability check here, since middleware runs on every request and capability checks are per-action per S6 §13.4)
-- Every admin Server Action calls `requireCapability(capability)` first (from `lib/server/auth/authorization.ts`), where `capability` is the action's required capability (e.g., `offer:create`, `offer:publish`)
-- No client-side authorization decisions; the server is the authority (NFR-012)
-- Better Auth `role` is NOT the business authorization source; `can()` reads `principalType` (NOT role) — this is already implemented in WP-002 and reused as-is
+**Invariant — middleware bypass must NOT grant access to protected data or mutations. Client-side hiding or disabled buttons must NOT constitute authorization.**
+
+`middleware.ts` (root-level, NEW) is authorized in WP-003 **only** as a lightweight UX/routing mechanism:
+
+- early redirect of unauthenticated `/admin/*` requests to `/admin/login` (saves a full page render for unauthenticated visitors);
+- UX optimization (no admin chrome rendered for unauthenticated requests);
+- lightweight unauthenticated routing.
+
+`middleware.ts` is **NOT** the security authority for `/admin`. The real authority is server-side, at every protected surface:
+
+- **Admin layout/page** (`app/admin/layout.tsx`, `app/admin/offres/page.tsx`, `app/admin/offres/[id]/page.tsx`, etc.):
+  - validate authenticated session server-side (via `getPrincipal()` from `lib/server/auth/authorization.ts`);
+  - validate authorized `principalType` when required (ADMIN or FANTOMAS).
+- **Every privileged mutation** (create, update, publish, suspend, republish, archive, logout):
+  - authenticate server-side (via `requireCapability()` which internally calls `getPrincipal()` → Better Auth `getSession()`);
+  - authorize with `can()` / `requireCapability()` (reads `principalType`, NOT Better Auth `role`);
+  - validate input server-side with Zod (`offerSchema` / `loginSchema` from `lib/server/validation/schemas.ts`);
+  - validate lifecycle state server-side (load offer, verify current status before transition).
+
+`middleware.ts` runs on every `/admin/*` request and provides early redirect, but it is a UX optimization — it MUST NOT be the only check. Even if an attacker bypasses middleware (e.g., by crafting a request directly to a Server Action), the server-side authentication + authorization + validation + lifecycle checks reject the request before any DB mutation. Client-side hiding or disabled buttons are UX only and do NOT authorize anything.
+
+Better Auth `role` is NOT the business authorization source; `can()` reads `principalType` (NOT role) — this is already implemented in WP-002 and reused as-is.
+
+### Login Authorization Clarification
+
+Authentication itself (username + password sign-in) is permitted before the user has an authenticated session — there is no circular rule requiring an authenticated capability before sign-in. The `loginAction` Server Action calls `auth.api.signInUsername({ body: { username, password } })` server-side; this is a public action (no `requireCapability()` call) and delegates entirely to Better Auth (which enforces its own rate limiting and credential verification).
+
+Only **after** successful authentication may an authorized JOURDAIN administrative principal enter the protected admin area. The canonical V1 administrative principals are `ADMIN` and `FANTOMAS` (per ADR-0004 and the capability matrix). The admin layout guard and every privileged Server Action then enforce that the authenticated principal is one of these (via `getPrincipal()` + `can()`).
+
+Better Auth `role` remains irrelevant to business authorization (per ADR-0004 and Section 10). The two JOURDAIN administrative principals are identified by `principalType`, NOT by `role`.
+
+### Better Auth Client-Side Integration (minimal — authorized only if required)
+
+WP-002 provides the **server-side** Better Auth architecture (`lib/server/auth/auth.ts`, `lib/server/auth/authorization.ts`, `lib/server/auth/capabilities.ts`) and the Better Auth route handler (`app/api/auth/[...all]/route.ts`). These remain canonical and are NOT modified by WP-003.
+
+WP-002 does NOT provide a **client-side** Better Auth browser client. WP-003 authorizes the creation of one **minimal** client-side auth integration **only if S10 implementation requires it** for:
+
+- username + password login (calling the Better Auth sign-in endpoint from the client);
+- logout (calling the Better Auth sign-out endpoint from the client);
+- session-aware UI behavior where appropriate (e.g., showing/hiding admin controls based on session presence — UX only, not authorization).
+
+Recommended logical surface (depending on canonical project structure):
+
+```
+lib/auth-client.ts    (or an equivalent clearly client-side module)
+```
+
+This module MUST:
+
+- Use Better Auth's installed client API (`createAuthClient` from `better-auth/client` or equivalent — exact import path depends on the installed Better Auth version).
+- Use the Username client plugin only if required by the installed version/configuration.
+- Be a thin client wrapper — login, logout, session-aware UX only.
+- NOT perform any authorization decisions. Client-side session awareness is for UX only; all authorization is server-side (per Section 10 Enforcement).
+- NOT modify the canonical server auth architecture.
+
+This module MUST NOT:
+
+- Be a replacement for Better Auth.
+- Be a new authentication system.
+- Implement client-side authorization as a security authority.
+- Provide public signup.
+- Provide user-management client.
+- Provide candidate or recruiter auth.
+
+**Compatibility with existing server auth files**: the existing server files `lib/server/auth/auth.ts`, `lib/server/auth/authorization.ts`, `lib/server/auth/capabilities.ts` are protected from unnecessary changes. If a genuinely required compatibility fix to those files is discovered during S10 (e.g., a Better Auth client-server contract mismatch that prevents the admin login flow from working), S10 MUST STOP before modifying them and report:
+
+```
+CONTRACT DIVERGENCE / EXISTING AUTH INTEGRATION GAP
+```
+
+This contract does NOT pre-authorize any specific change to those server files. Any required change must be approved by OWNER as a contract patch before S10 modifies them. S10's allowed implementation freedom (Section 18) does NOT extend to the server auth core.
 
 ### Admin Offer List
 
@@ -215,7 +282,7 @@ All covered requirements are traced to MS-003 in DELIVERY_ROADMAP §7 (line 208�
 ### Error Handling
 
 - Invalid form: return field-specific error messages in French (FR-023-ERR, FR-024-ERR); preserve entered form values
-- Unauthorized (no session): middleware redirects to `/admin/login` before the Server Action runs
+- Unauthorized (no session): middleware.ts (UX/redirect) redirects unauthenticated `/admin/*` requests to `/admin/login` early; admin layout guard (server-side) rejects any request that bypasses middleware; Server Action `requireCapability()` rejects any unauthenticated mutation attempt before any DB write. The server is the authority; middleware bypass must NOT grant access.
 - Forbidden (authenticated but lacks capability): Server Action returns `{ ok: false, error: 'Action non autorisée' }`; UI shows the error
 - Unauthenticated mutation attempt: Server Action's `requireCapability()` throws/returns authorization error; no DB write
 - Offer not found: return `{ ok: false, error: 'Offre introuvable' }`; UI shows the error or 404 page
@@ -230,7 +297,7 @@ All covered requirements are traced to MS-003 in DELIVERY_ROADMAP §7 (line 208�
   - Zod offerSchema validation (required fields, optional fields, email/URL format, empty accepted)
   - `can()` checks for offer capabilities (ADMIN + FANTOMAS both ALLOW for all offer:* capabilities)
 - Integration tests (Vitest against real TEST_DATABASE_URL — NOT Production, NOT Preview, no DB mocks):
-  - Unauthenticated admin access rejected (middleware redirect)
+  - Unauthenticated admin access rejected (middleware UX/redirect + server-side layout guard + server-side Server Action requireCapability)
   - ADMIN can perform all authorized operations
   - FANTOMAS can perform all ADMIN operations (inheritance verified)
   - Invalid input rejected (missing title, missing description, invalid email, invalid URL)
@@ -337,7 +404,7 @@ ADMIN navigates to /admin/login
     → Better Auth: checks rate limiter (DB-backed, from WP-002); verifies credentials (scrypt); creates DB session; sets httpOnly cookie
     → On success: redirect to /admin/offres
     → On failure: re-render login page with error "Identifiants invalides" (no information leak about which field was wrong)
-  → Unauthenticated visitor at /admin/* → middleware redirects to /admin/login (FR-003)
+  → Unauthenticated visitor at /admin/* → middleware.ts (UX/redirect) redirects to /admin/login early; admin layout guard (server-side) rejects any bypass; no admin content rendered (FR-003)
 ```
 
 ### Admin Logout Flow (FR-002)
@@ -626,12 +693,17 @@ Note on `offer:read` (brief §17): this capability does NOT exist in the canonic
 
 Note on `offer:update` (brief §17): this name does NOT exist in the canonical model. The canonical identifiers are `offer:edit` (FR-021) and `offer:save` (FR-022). WP-003 reuses `offer:edit` + `offer:save` as already defined. No `offer:update` capability is created or used.
 
-### Enforcement (per S6 §13.4 — reproduced)
+### Enforcement (per S6 §13.4 — reproduced and clarified per owner patch §2)
 
-- **Middleware** (`middleware.ts`, NEW root-level): protects `/admin/*` routes; calls Better Auth session check; if no valid session → redirect to `/admin/login`. Authentication only — no capability check here (middleware runs on every request; capability checks are per-action).
-- **Layout guard** (`app/admin/layout.tsx`): double-checks session via `getPrincipal()`; if null → redirect to `/admin/login` (defense in depth).
-- **Each Server Action**: calls `requireCapability(capability)` first, where `capability` is the action's required capability. `requireCapability` internally calls `getPrincipal()` (which calls Better Auth's `getSession()`) and `can()`. If either fails, the action returns an authorization error.
-- **No client-side authorization**: client components render based on session info passed from the server, but all mutations are validated server-side. The server is the authority (NFR-012).
+**Security authority is server-side. `middleware.ts` is a UX/redirect optimization, not the security authority.**
+
+- **Middleware** (`middleware.ts`, NEW root-level): **UX/redirect only**. Provides early redirect of unauthenticated `/admin/*` requests to `/admin/login` (saves a full page render for unauthenticated visitors; lightweight UX optimization). Middleware is NOT the security authority — bypassing middleware (e.g., crafting a direct request to a Server Action) MUST NOT grant access to protected data or mutations. No capability check in middleware (capability checks are per-action, server-side, in the Server Action).
+- **Admin layout guard** (`app/admin/layout.tsx`): the first **server-side authority** for `/admin`. Validates authenticated session server-side via `getPrincipal()` (which calls Better Auth's `getSession()`). If null → redirect to `/admin/login`. This is the real authentication check for the admin area (defense in depth on top of middleware's UX redirect).
+- **Admin pages** (`app/admin/offres/page.tsx`, `app/admin/offres/[id]/page.tsx`, etc.): Server Components that validate authenticated session server-side (via `getPrincipal()`) before rendering any admin data. An unauthenticated request that somehow bypasses middleware is still rejected here (no admin data rendered).
+- **Each Server Action** (the real authorization authority for mutations): calls `requireCapability(capability)` first, where `capability` is the action's required capability. `requireCapability` internally calls `getPrincipal()` (which calls Better Auth's `getSession()`) and `can()`. If either fails, the action returns an authorization error BEFORE any DB mutation. The Server Action then validates input via Zod and validates lifecycle state (load offer, verify current status) before applying the transition.
+- **No client-side authorization**: client components render based on session info passed from the server, but all mutations are validated server-side. Client-side hiding or disabled buttons are UX only and do NOT constitute authorization. The server is the authority (NFR-012).
+
+**Invariant**: middleware bypass + client-side UI state must NOT grant access to protected data or mutations. The server-side layout guard + Server Action `requireCapability()` + Zod validation + lifecycle state validation are the real authority.
 
 ---
 
@@ -666,7 +738,7 @@ Per S6 §10.1, Server Actions are TypeScript functions invoked from client compo
 | Server Action | Route / location | Input | Output | Auth (capability) |
 |---|---|---|---|---|
 | `loginAction` | app/admin/login/page.tsx | `{ username, password }` (Zod loginSchema) | `{ ok: boolean, error?: string }` | None (public — no capability check; delegates to Better Auth signInUsername) |
-| `logoutAction` | app/admin/layout.tsx | — | `{ ok: boolean }` | Authenticated (ADMIN or FANTOMAS — middleware + layout guard) |
+| `logoutAction` | app/admin/layout.tsx | — | `{ ok: boolean }` | Authenticated (ADMIN or FANTOMAS — server-side layout guard + requireCapability) |
 | `createOfferAction` | app/admin/offres/nouvelles/page.tsx | `OfferInput` (Zod offerSchema) | `{ ok: boolean, id?: uuid, error?: string }` | `offer:create` + `offer:save` |
 | `updateOfferAction` | app/admin/offres/[id]/page.tsx | `{ id, ...OfferInput }` (Zod) | `{ ok: boolean, error?: string }` | `offer:edit` + `offer:save` |
 | `publishOfferAction` | components/admin/PublishButton.tsx (or app/admin/offres page) | `{ id }` | `{ ok: boolean, error?: string }` | `offer:publish` |
@@ -696,8 +768,8 @@ WP-003 introduces NO external API (INT-001, OOS-015). All Server Actions are int
 | `/admin/offres` | app/admin/offres/page.tsx (Server Component) | Admin offer list | FR-010, FR-011, FR-012, FR-013, FR-061 |
 | `/admin/offres/nouvelles` | app/admin/offres/nouvelles/page.tsx (Client Component with form) | New offer form | FR-020 |
 | `/admin/offres/[id]` | app/admin/offres/[id]/page.tsx (Client Component with form) | Edit form | FR-021 |
-| (layout) | app/admin/layout.tsx | Auth guard (defense in depth) + logout button | FR-002, FR-003 |
-| (middleware) | middleware.ts (root-level) | Protect `/admin/*` (authentication only) | FR-003 |
+| (layout) | app/admin/layout.tsx | Server-side auth guard (getPrincipal — validate authenticated session; redirect if null) + logout button. This is the server-side authority for /admin authentication. | FR-002, FR-003 |
+| (middleware) | middleware.ts (root-level) | UX/redirect only — early redirect of unauthenticated /admin/* to /admin/login. NOT the security authority (server-side layout guard + Server Action requireCapability are the authority). | FR-003 |
 
 Note on route naming: S6 §6.1 uses `nouvelles` (feminine plural, agreeing with "offres") and `[id]` (no `/modifier` suffix). The brief §14 mentions alternative names (`nouveau`, `{id}/modifier`) but says "first inspect the canonical documents. If routes are already decided there, use them exactly." The canonical S6 routes are used exactly.
 
@@ -707,7 +779,7 @@ Note on route naming: S6 §6.1 uses `nouvelles` (feminine plural, agreeing with 
 
 | Error / Edge | Expected Behavior | Source |
 |---|---|---|
-| Unauthenticated access to `/admin/*` | middleware redirects to `/admin/login`; no admin content rendered | FR-003, S6 §13.4 |
+| Unauthenticated access to `/admin/*` | middleware.ts (UX/redirect) redirects to `/admin/login` early; admin layout guard (server-side) rejects any request that bypasses middleware; no admin content rendered | FR-003, S6 §13.4 |
 | Invalid credentials on login | Re-render login page with error "Identifiants invalides" (no information leak about which field was wrong) | FR-001 acceptance |
 | Rate limit exceeded on login | Better Auth returns "too many attempts" error (DB-backed rate limiter from WP-002); login page shows the error | TD-031, S6 §12.3 |
 | Missing title on save | Reject with field-specific error "Le titre est requis"; preserve entered form values | FR-023, BR-030 |
@@ -737,7 +809,7 @@ Acceptance criteria must be observable, testable, traceable, and specific enough
 |---|---|---|
 | AC-001 | Admin login UI functional | app/admin/login/page.tsx exists; login form renders with French labels; loginAction Server Action exists; successful login redirects to /admin/offres |
 | AC-002 | Logout functional | logoutAction Server Action exists; successful logout redirects to /admin/login; session record deleted in DB |
-| AC-003 | Unauthorized admin access denied | Unauthenticated request to /admin/offres → middleware redirects to /admin/login (integration test) |
+| AC-003 | Unauthorized admin access denied | Unauthenticated request to /admin/offres → middleware.ts (UX/redirect) redirects to /admin/login; admin layout guard (server-side) rejects any request that bypasses middleware; no admin content rendered. Integration test must also verify that bypassing middleware (e.g., direct Server Action call) is rejected server-side by requireCapability() (integration test) |
 | AC-004 | ADMIN accepted | ADMIN login PASS; ADMIN can access /admin/offres; ADMIN can perform all admin actions |
 | AC-005 | FANTOMAS accepted for ADMIN capabilities | FANTOMAS login PASS; FANTOMAS can access /admin/offres; FANTOMAS can perform all admin actions (PERM-004 inheritance) |
 | AC-006 | Admin offer list functional | app/admin/offres/page.tsx exists; displays all offers (regardless of status) sorted by created_at DESC; each row shows title, status badge, actions |
@@ -763,7 +835,7 @@ Acceptance criteria must be observable, testable, traceable, and specific enough
 | AC-026 | Source fields supported | source_name (text), source_url (URL), source_publication_date (date) accepted in form; saved to DB; source_url validated when provided (BR-050, BR-061, BR-080) (integration test) |
 | AC-027 | Server validation authoritative | Server Action validates via Zod BEFORE DB write; invalid input rejected with field-specific error; client-side validation is UX-only (integration test — bypass client validation, verify server still rejects) |
 | AC-028 | Authz checked server-side | Each admin Server Action calls requireCapability() first; unauthenticated or unauthorized mutation rejected before DB write (integration test) |
-| AC-029 | middleware.ts created | middleware.ts exists at root; protects /admin/* routes; redirects unauthenticated to /admin/login (integration test) |
+| AC-029 | middleware.ts created as UX/redirect only | middleware.ts exists at root; provides early redirect of unauthenticated /admin/* requests to /admin/login (UX optimization). Security authority is server-side: admin layout guard (getPrincipal) + each Server Action (requireCapability + Zod + lifecycle state). Integration test verifies that bypassing middleware does NOT grant access (integration test) |
 | AC-030 | No public portal implementation | No app/(public)/offres/ directory; no public offer list; no public offer detail; app/page.tsx remains minimal from WP-001 (code inspection) |
 | AC-031 | No WP-004 work | No sitemap.ts, no robots.ts, no public Tiptap server-side renderer (code inspection) |
 | AC-032 | No new capabilities | lib/server/auth/capabilities.ts unchanged from WP-002; no offer:read, no offer:update, no SUPER_ADMIN (code inspection) |
@@ -811,9 +883,9 @@ S10 MUST NOT:
 - Merge dev into main
 - Modify db/schema.ts (no schema changes — reuse WP-002 schema)
 - Create new migration files in db/migrations/ (no migration needed)
-- Modify lib/server/auth/auth.ts (Better Auth config — reuse from WP-002)
-- Modify lib/server/auth/authorization.ts (can/requireCapability/getPrincipal — reuse from WP-002)
-- Modify lib/server/auth/capabilities.ts (capability model — reuse from WP-002; no new capabilities, no rename, no duplication)
+- Modify lib/server/auth/auth.ts (Better Auth config — reuse from WP-002). If a genuinely required compatibility fix to this file is discovered during S10: `CONTRACT DIVERGENCE / EXISTING AUTH INTEGRATION GAP` — STOP before modifying it unless the contract explicitly permits the specific change. This contract does NOT permit any specific change to this file.
+- Modify lib/server/auth/authorization.ts (can/requireCapability/getPrincipal — reuse from WP-002). Same CONTRACT DIVERGENCE / EXISTING AUTH INTEGRATION GAP rule applies.
+- Modify lib/server/auth/capabilities.ts (capability model — reuse from WP-002; no new capabilities, no rename, no duplication). Same CONTRACT DIVERGENCE / EXISTING AUTH INTEGRATION GAP rule applies.
 - Modify app/api/auth/[...all]/route.ts (Better Auth route handler — reuse from WP-002)
 - Modify app/page.tsx or app/layout.tsx (root page/layout — remain from WP-001)
 - Add new capabilities (e.g., `offer:read`, `offer:update`, `SUPER_ADMIN`) — reuse existing canonical identifiers
@@ -836,6 +908,13 @@ S10 MUST NOT:
 - Apply migrations to Production or Preview DB
 - Use "not obviously Production" as sufficient target verification (must positively verify DEV/TEST)
 - Bypass server-side validation or authorization
+- Treat middleware.ts as the security authority for /admin — middleware is UX/redirect only; server-side layout guard + Server Action requireCapability + Zod + lifecycle state are the authority. Middleware bypass must NOT grant access to protected data or mutations.
+- Treat client-side hiding or disabled buttons as authorization — client-side UI state is UX only and does NOT authorize anything. The server is the authority (NFR-012).
+- Implement a circular rule requiring an authenticated capability before username/password sign-in — authentication itself is permitted before the user has an authenticated session. Only post-authentication admin access requires an authorized administrative principal (ADMIN or FANTOMAS).
+- Use Better Auth `role` as the business authorization source — `principalType` is the source (ADR-0004); `can()` reads `principalType`, NOT `role`.
+- Replace the Better Auth server architecture or add a new authentication system (CONTRACT DIVERGENCE if needed — STOP and report)
+- Add a client-side auth module that performs client-side authorization as a security authority — the client may only be session-aware for UX; all authorization is server-side
+- Add a public signup client, user-management client, candidate auth, or recruiter auth (FR-004)
 - Expose internal stack traces or secrets to the browser
 
 ---
@@ -878,10 +957,10 @@ Per S9 §30, S10 may choose freely in these areas (provided behavior remains cor
 | Field | Value |
 |---|---|
 | WP ID | WP-003 |
-| Authorized Purpose | Admin Offer Management (MS-003) — admin login, offer list, create/edit form with Tiptap, full lifecycle (publish/suspend/republish/archive), server-side authz + validation, no public portal |
+| Authorized Purpose | Admin Offer Management (MS-003) — admin login, offer list, create/edit form with Tiptap, full lifecycle (publish/suspend/republish/archive), server-side authz + validation + lifecycle state checks, optional minimal Better Auth client-side module for login/logout/session-aware UI. No public portal. |
 | Requirements Covered | FR-001, FR-002, FR-003, FR-010, FR-011, FR-012, FR-013 (SHOULD), FR-020–FR-025, FR-030–FR-035, FR-061, BR-020–BR-080 (relevant), PERM-002/003/004, NFR-040/050/060/012 |
 | Verified Baseline | dev `e86db99bc513e4f8289a08325ef996f9f10317b2`; main `0bc77a783c8efc1ba6056c67b5a5e290dd26ee4d` (unchanged) |
-| In Scope | Admin login UI, logout, middleware.ts, admin offer list (with status filter + optional title search), new/edit offer form with Tiptap, lifecycle Server Actions, server-side validation, integration tests |
+| In Scope | Admin login UI, logout, middleware.ts (UX/redirect only), admin offer list (with status filter + optional title search), new/edit offer form with Tiptap, lifecycle Server Actions, server-side authz + validation + lifecycle state checks, optional minimal Better Auth client-side module (lib/auth-client.ts), integration tests |
 | Out of Scope | Public portal (WP-004), E2E (WP-005), Vercel/CI (WP-006), forgot-password, user management, candidate/recruiter features, physical delete, automatic expiration, schema changes, auth core changes |
 | Technical Constraints | ADR-0001–0008, TD-006/007/008/009/011/030, S0 §13/§23/§25, NFR-040 (French), NFR-012 (session protection) |
 | Acceptance Contract | 46 conditions (AC-001 through AC-046) |
@@ -931,10 +1010,11 @@ Versions: exact versions resolved and locked by package.json + pnpm-lock.yaml at
 | File/Directory | Action | Notes |
 |---|---|---|
 | `app/admin/` | CREATE | Admin route group: login/page.tsx, layout.tsx, page.tsx (redirect), offres/page.tsx, offres/nouvelles/page.tsx, offres/[id]/page.tsx |
-| `middleware.ts` | CREATE | Root-level middleware; protects /admin/* (authentication only — redirects to /admin/login if no session) |
+| `middleware.ts` | CREATE | Root-level middleware; UX/redirect only — early redirect of unauthenticated /admin/* requests to /admin/login (UX optimization). NOT the security authority. Server-side authority: admin layout guard (getPrincipal) + each Server Action (requireCapability + Zod + lifecycle state). |
 | `components/admin/` | CREATE | Admin-only components: OfferForm, OfferList (or inline in page), StatusBadge, action buttons (PublishButton, SuspendButton, RepublishButton, ArchiveButton), TiptapEditor |
 | `components/ui/` | CREATE (minimal) | shadcn/ui copies — only components actually used by the implemented admin screens |
 | `lib/server/services/offers.ts` | CREATE | Offer CRUD + lifecycle transitions service (create, update, publish, suspend, republish, archive, list, getById) |
+| `lib/auth-client.ts` (or equivalent clearly client-side module) | CREATE (only if S10 requires it) | Minimal Better Auth browser client — login, logout, session-aware UX only. Use Better Auth's installed client API + Username client plugin only if required. NOT a security authority; all authorization is server-side. NOT a replacement of Better Auth; NOT a new auth system; NOT public signup; NOT user-management; NOT candidate/recruiter auth. |
 | `lib/server/validation/schemas.ts` | MODIFY (extend) | Extend existing offerSchema if WP-003 requires (e.g., tighten description validation); do NOT remove existing schemas |
 | `package.json` | MODIFY | Add Tiptap, react-hook-form, @hookform/resolvers, lucide-react (if used), shadcn/ui deps |
 | `pnpm-lock.yaml` | MODIFY | Lockfile updated |
@@ -961,14 +1041,35 @@ Versions: exact versions resolved and locked by package.json + pnpm-lock.yaml at
 
 ### Branch Strategy
 
-Per S10 implementation execution protocol §6: "branch and HEAD (must be origin/main or authorized base)." The canonical development branch is `dev` (per PROJECT_STATE). WP-001 and WP-002 were both implemented directly on `dev` (no dedicated work-package branch). The current canonical policy is: implement on `dev` directly.
+`dev` remains the **CANONICAL DEVELOPMENT INTEGRATION BRANCH**. `main` remains the **RELEASE / FUTURE PRODUCTION BRANCH** (release-only, unchanged at `0bc77a783c8efc1ba6056c67b5a5e290dd26ee4d`).
 
-WP-003 follows the exact canonical policy: S10 implements on `dev` directly. No dedicated `wp/003-admin-offers` branch is created (the brief §28 allows a dedicated branch only "if the now-approved workflow requires it" — the current workflow does not require it).
+The future S10 WP-003 must execute on a **dedicated work-package branch** created from the canonical `dev` HEAD that is approved at the moment of authorization.
 
-- Active branch for S10: `dev`
-- Do NOT develop on `main` (DISALLOWED per branch cutover)
-- Do NOT merge `dev` into `main` during S10
-- `main` remains release-only at `0bc77a783c8efc1ba6056c67b5a5e290dd26ee4d`
+Canonical work-package branch name:
+
+```
+wp/003-admin-offers
+```
+
+Flow:
+
+```
+dev (canonical development integration branch)
+  → create wp/003-admin-offers from approved dev HEAD
+  → S10 implementation on wp/003-admin-offers
+  → S11 independent verification on wp/003-admin-offers
+  → OWNER closure
+  → controlled merge of wp/003-admin-offers back into dev (after closure)
+```
+
+Rules:
+
+- Do NOT develop WP-003 directly on `dev`. S10 creates `wp/003-admin-offers` from the approved `dev` HEAD and implements on that branch.
+- Do NOT develop on `main` (DISALLOWED per branch cutover; `main` is release-only).
+- Do NOT merge `wp/003-admin-offers` into `main`.
+- Do NOT merge `dev` into `main` during WP-003.
+- The S9 contract itself (this document) remains on `dev` — it is the approved work-package contract that authorizes the future `wp/003-admin-offers` branch.
+- After OWNER closure of WP-003, a controlled merge of `wp/003-admin-offers` into `dev` is authorized; `dev` then advances. `main` is not touched by WP-003.
 
 ### Verification Commands (per brief §29)
 
@@ -1022,11 +1123,15 @@ At S9 closure, the state must be:
 - No WP-004 prepared
 - Offer lifecycle complete (all 4 states + all allowed transitions defined)
 - Tiptap scope bounded (V1 subset)
-- Authz server-side (middleware + requireCapability)
+- Authz server-side — middleware is UX/redirect only; server-side layout guard + Server Action requireCapability + Zod + lifecycle state are the authority; middleware bypass must NOT grant access; client-side hiding/disabled buttons must NOT constitute authorization
+- Better Auth client-side module authorized (lib/auth-client.ts) only if S10 requires it — login, logout, session-aware UX only; NOT a security authority; NOT a replacement of Better Auth; NOT public signup / user-management / candidate / recruiter auth
+- Server auth core files (lib/server/auth/auth.ts, authorization.ts, capabilities.ts) protected from unnecessary changes — any genuinely required compatibility fix requires CONTRACT DIVERGENCE / EXISTING AUTH INTEGRATION GAP report + OWNER contract patch before modification
+- Login authorization is non-circular: authentication itself is permitted before session; only post-authentication admin access requires an authorized administrative principal (ADMIN or FANTOMAS)
 - Fantomas inheritance preserved (no new capabilities; reuse existing)
 - Physical delete absent (no deleteOfferAction)
 - Automatic expiration absent (no scheduler)
 - Public portal excluded (no app/(public)/offres/)
+- Dedicated work-package branch planned: `wp/003-admin-offers` (created from approved dev HEAD; S10 implements on this branch; controlled merge to dev after OWNER closure; no merge to main)
 - Allowed change surface explicit (Section 20 — Allowed Change Surface)
 - Tests and exit criteria measurable (46 acceptance criteria)
 
