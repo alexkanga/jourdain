@@ -8,6 +8,9 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./vitest-setup.ts"],
+    // Exclude Playwright E2E specs from Vitest (per WP-005 §5.21 — test command separation).
+    // E2E specs live under tests/e2e/ and are run via `pnpm test:e2e` (playwright test).
+    exclude: ["node_modules/**", "tests/e2e/**", ".next/**"],
   },
   resolve: {
     alias: {
