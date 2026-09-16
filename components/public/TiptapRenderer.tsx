@@ -1,5 +1,4 @@
 
-
 /**
  * TiptapRenderer — deterministic JSON-to-React renderer for public offer descriptions.
  *
@@ -14,6 +13,12 @@
  * This is a small deterministic renderer — not a generalized rich-text framework.
  * Only known node types from the approved V1 subset are rendered; unknown
  * types are safely ignored.
+ *
+ * LINK SAFETY: Tiptap link marks are validated against an allowlist of URL
+ * schemes (http, https, mailto). Unsafe schemes (javascript:, data:, vbscript:,
+ * file:, etc.) are rejected — the link text is preserved as plain inline content
+ * but NO clickable <a href> is rendered. Empty, non-string, or malformed href
+ * values are also rejected.
  */
 
 type TiptapNode = {
@@ -23,6 +28,39 @@ type TiptapNode = {
   text?: string;
   marks?: { type: string; attrs?: Record<string, unknown> }[];
 };
+
+/**
+ * Safe-link policy: validate a Tiptap link href.
+ * Returns a safe href string if the scheme is allowed, or null if rejected.
+ *
+ * Allowed schemes: http, https, mailto
+ * Rejected: javascript, data, vbscript, file, empty, non-string, malformed
+ */
+function safeHref(href: unknown): string | null {
+  if (typeof href !== "string") return null;
+  const trimmed = href.trim();
+  if (trimmed === "") return null;
+  const lower = trimmed.toLowerCase();
+  // Explicitly reject dangerous schemes
+  if (
+    lower.startsWith("javascript:") ||
+    lower.startsWith("data:") ||
+    lower.startsWith("vbscript:") ||
+    lower.startsWith("file:")
+  ) {
+    return null;
+  }
+  // Allow only http, https, mailto
+  if (
+    lower.startsWith("http://") ||
+    lower.startsWith("https://") ||
+    lower.startsWith("mailto:")
+  ) {
+    return trimmed;
+  }
+  // Reject everything else (relative URLs, protocol-relative, unknown schemes)
+  return null;
+}
 
 function renderMarks(text: string, marks?: { type: string; attrs?: Record<string, unknown> }[]): React.ReactNode {
   if (!marks || marks.length === 0) return text;
@@ -35,18 +73,33 @@ function renderMarks(text: string, marks?: { type: string; attrs?: Record<string
       case "italic":
         result = <em key={mark.type}>{result}</em>;
         break;
-      case "link":
-        result = (
-          <a
-            href={mark.attrs?.href as string}
-            target="_blank"
-            rel="noopener noreferrer"
-            key={mark.type}
-          >
-            {result}
-          </a>
-        );
+      case "link": {
+        const href = safeHref(mark.attrs?.href);
+        if (href === null) {
+          // Unsafe or invalid href: preserve the link text as plain content
+          // but do NOT render a clickable <a> element.
+          break;
+        }
+        if (href.startsWith("mailto:")) {
+          result = (
+            <a href={href} key={mark.type}>
+              {result}
+            </a>
+          );
+        } else {
+          result = (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              key={mark.type}
+            >
+              {result}
+            </a>
+          );
+        }
         break;
+      }
       default:
         // Unknown marks are ignored (safe by construction)
         break;
