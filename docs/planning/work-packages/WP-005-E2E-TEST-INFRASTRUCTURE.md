@@ -7,10 +7,12 @@
 | WP ID | WP-005 |
 | Name | E2E Test Infrastructure |
 | Source Milestone | MS-005 — E2E Integration + Hardening (DELIVERY_ROADMAP §7) |
-| Status | DRAFT (PATCHED) — PENDING OWNER APPROVAL + AUTHORIZATION |
+| Status | DRAFT (FINAL PATCHED) — PENDING OWNER APPROVAL + AUTHORIZATION |
 | Canonical dev SHA (at S9 start) | `484898e5b513d1313f458880a6fc6b32175aa990` |
-| Canonical dev SHA (after initial S9 contract) | `6278315929868210ed9ac96a80748e6f471b0c25` |
-| S9 patch operations | 1 (this patch — harden E2E target verification contract) |
+| Canonical dev SHA (after initial S9 contract) | `6278315929868210ed9ac96a80748e6f471b0c25` (HISTORICAL PRE-PATCH — not the S10 branch base) |
+| Canonical dev SHA (after S9 hardening patch) | `6dd5b337449f266b436b46420061d887cd51c0b1` (HISTORICAL PRE-FINAL-PATCH — not the S10 branch base) |
+| FINAL S10 BRANCH BASE (frozen) | `6dd5b337449f266b436b46420061d887cd51c0b1` (the dev head AFTER this final S9 patch — S10 MUST branch from this exact SHA, including BOTH the original S9 contract AND the final target-verification hardening) |
+| S9 patch operations | 2 (patch 1: harden E2E target verification contract; patch 2: freeze S10 baseline and test fingerprint — this patch) |
 | Canonical main SHA (at S9 start) | `0bc77a783c8efc1ba6056c67b5a5e290dd26ee4d` |
 | Source Charter (S4) | `docs/planning/PROJECT_CHARTER.md` at `fa377c1` |
 | Source Product Requirements (S5) | `docs/product/PRODUCT_REQUIREMENTS.md` at `9ec4a08` |
@@ -187,7 +189,7 @@ The runner positively identifies the database target BEFORE ANY MUTATION (per §
 
 1. **Source of truth**: read `TEST_DATABASE_URL` from `.env.local` via the canonical `parseEnvLocal()` helper (already used by `__tests__/auth-regression.test.ts`, `__tests__/offers-integration.test.ts`, `__tests__/public-offers-integration.test.ts`).
 2. **URL type/scheme validation**: validate `TEST_DATABASE_URL` matches the URL type/scheme expected by the current project architecture. Per ADR-0002 + ADR-0006 + S6 TD-019, the canonical database architecture is `Drizzle + neon-http` over a `postgresql://` URL with `sslmode=require`. Reject URLs that are not `postgresql://` (including `file:`, `postgres://` without SSL, `mysql://`, etc.).
-3. **Positive TEST fingerprint comparison**: the runner reads `E2E_EXPECTED_TEST_DATABASE_HOST` from `.env.local` (or `.env.example` as fallback). This is a project-local, NON-SECRET expected TEST hostname (e.g., `ep-gentle-rice-b1vxvfsf.c-5.eu-central-1.aws.neon.tech`). The runner parses the URL hostname of `TEST_DATABASE_URL` and compares it to the expected fingerprint. If they do not match → **STOP** with `TEST_FINGERPRINT_MISMATCH` error. This is the project-specific enforcement of AISE S0 v0.2 §26 — it proves positively that this is the expected TEST target, not merely that it differs from DEV/PROD. (The expected hostname itself is non-secret — it identifies a database resource, not credentials. Do NOT commit database credentials.)
+3. **Positive TEST fingerprint comparison**: the runner reads `E2E_EXPECTED_TEST_DATABASE_HOST` from the authorized execution environment (`.env.local` for local developer runs, or the explicitly injected process environment for CI runs). **No silent `.env.example` fallback.** A static example file may be stale, copied from another environment, generic, or not representative of the authorized TEST resource — it MUST NOT be the authoritative runtime source for the fingerprint. The runner parses the URL hostname of `TEST_DATABASE_URL` and compares it to the explicit `E2E_EXPECTED_TEST_DATABASE_HOST`. If they do not match → **STOP** with `TEST_FINGERPRINT_MISMATCH` error. If `E2E_EXPECTED_TEST_DATABASE_HOST` is missing from the authorized runtime environment → **STOP** with `MISSING_EXPECTED_TEST_FINGERPRINT` error. Do NOT infer the fingerprint from `TEST_DATABASE_URL` itself — comparing a value to a fingerprint derived from itself would provide no independent target identity evidence. This is the project-specific enforcement of AISE S0 v0.2 §26 — it proves positively that this is the expected TEST target, not merely that it differs from DEV/PROD. (The expected hostname itself is non-secret — it identifies a database resource, not credentials. Do NOT commit database credentials.) `.env.example` MAY document the variable name and its purpose, but MUST NOT be the authoritative runtime source — it documents, it does not authorize.
 4. **Read-only connectivity/identity probe**: open a Neon HTTP connection using `@neondatabase/serverless` `neon()` and execute ONLY read-only SQL:
    - `SELECT 1 AS one` (reachability)
    - `SELECT current_database() AS db, current_setting('server_version') AS version` (identity assertion — records actual database name)
@@ -220,6 +222,7 @@ If additional post-spawn confirmation is desired, the runner uses a SAFE pattern
 
 - If `TEST_DATABASE_URL` is missing → **STOP** with `MISSING_TEST_DATABASE_URL` error.
 - If `TEST_DATABASE_URL` URL scheme is not `postgresql://` (e.g., `file:`, `mysql:`, etc.) → **STOP** with `TEST_IS_SQLITE_FALLBACK` (for `file:`) or `TEST_UNSUPPORTED_SCHEME` (for other non-postgresql schemes).
+- If `E2E_EXPECTED_TEST_DATABASE_HOST` is missing from the authorized runtime environment → **STOP** with `MISSING_EXPECTED_TEST_FINGERPRINT` error (no `.env.example` fallback, no inference from `TEST_DATABASE_URL`).
 - If `TEST_DATABASE_URL` host does NOT match `E2E_EXPECTED_TEST_DATABASE_HOST` → **STOP** with `TEST_FINGERPRINT_MISMATCH` error.
 - If `TEST_DATABASE_URL` is set but unreachable → **STOP** with `TEST_DB_UNREACHABLE` error.
 - If `TEST_DATABASE_URL` host matches the DEV host → **STOP** with `TEST_EQUALS_DEV` error.
@@ -563,8 +566,10 @@ GitHub Actions CI runner
    - If TEST_DATABASE_URL scheme is not "postgresql://" → STOP: TEST_UNSUPPORTED_SCHEME
    - If TEST_DATABASE_URL starts with "file:" → STOP: TEST_IS_SQLITE_FALLBACK
 5. Parse URL hostname of TEST_DATABASE_URL → record as testHost
-6. Read E2E_EXPECTED_TEST_DATABASE_HOST (from .env.local, or .env.example as fallback)
+6. Read E2E_EXPECTED_TEST_DATABASE_HOST from the authorized execution environment (NOT from .env.example — no silent fallback)
+   - If E2E_EXPECTED_TEST_DATABASE_HOST missing → STOP: MISSING_EXPECTED_TEST_FINGERPRINT
    - If hostname(TEST_DATABASE_URL) != E2E_EXPECTED_TEST_DATABASE_HOST → STOP: TEST_FINGERPRINT_MISMATCH
+   - Do NOT infer fingerprint from TEST_DATABASE_URL itself
 7. If DEV_DATABASE_URL present and its hostname == testHost → STOP: TEST_EQUALS_DEV
 8. If PROD_DATABASE_URL present and its hostname == testHost → STOP: TEST_EQUALS_PROD
 9. Read-only connectivity probe: SELECT 1 AS one on TEST_DATABASE_URL → if fail, STOP: TEST_DB_UNREACHABLE
@@ -728,7 +733,7 @@ The following numbered acceptance criteria MUST all be met for S11 to PASS. They
 | AC-010 | E2E runner reads `TEST_DATABASE_URL` from `.env.local`, performs Phase A target verification (read-only), and injects `DATABASE_URL=$TEST_DATABASE_URL` into the spawned Next.js process — the child environment is built from a curated allowlist; any inherited parent `DATABASE_URL` is removed/overridden |
 | AC-011 | Runner refuses to start if `TEST_DATABASE_URL` is missing (error: `MISSING_TEST_DATABASE_URL`) |
 | AC-012 | Runner refuses to start if `TEST_DATABASE_URL` URL scheme is not `postgresql://` — specifically `file:` (error: `TEST_IS_SQLITE_FALLBACK`) or any other non-postgresql scheme (error: `TEST_UNSUPPORTED_SCHEME`) |
-| AC-012a | Runner performs positive TEST fingerprint comparison: hostname(`TEST_DATABASE_URL`) MUST equal `E2E_EXPECTED_TEST_DATABASE_HOST` (error: `TEST_FINGERPRINT_MISMATCH` if not). The expected hostname is read from `.env.local` (or `.env.example` as fallback) — it is a non-secret project-local config value, NOT a credential |
+| AC-012a | Runner performs positive TEST fingerprint comparison: hostname(`TEST_DATABASE_URL`) MUST equal `E2E_EXPECTED_TEST_DATABASE_HOST` (error: `TEST_FINGERPRINT_MISMATCH` if not). The expected hostname is read explicitly from the authorized runtime environment (`.env.local` for local developer runs, or explicitly injected process env for CI). No `.env.example` fallback — a static example file may be stale, copied from another environment, generic, or not representative of the authorized TEST resource. If `E2E_EXPECTED_TEST_DATABASE_HOST` is missing → STOP with `MISSING_EXPECTED_TEST_FINGERPRINT`. The runner MUST NOT infer the fingerprint from `TEST_DATABASE_URL` itself. The expected hostname is a non-secret project-local config value, NOT a credential |
 | AC-013 | Runner refuses to start if `TEST_DATABASE_URL` host matches `DEV_DATABASE_URL` host (error: `TEST_EQUALS_DEV`) |
 | AC-014 | Runner refuses to start if `TEST_DATABASE_URL` host matches `PROD_DATABASE_URL` host (error: `TEST_EQUALS_PROD`) |
 | AC-015 | Runner refuses to start if `TEST_DATABASE_URL` is unreachable (error: `TEST_DB_UNREACHABLE`) — probe is READ-ONLY (`SELECT 1 AS one`) |
@@ -820,7 +825,7 @@ S11 for WP-005 must independently verify the INFRASTRUCTURE itself, not only the
 |---|---|
 | Local browser run | `pnpm test:e2e` runs successfully on a clean checkout with TEST_DATABASE_URL set |
 | TEST database positively identified | Phase A target verification (AC-010 through AC-012a) passes; report shows actual TEST database name + actual TEST host matching `E2E_EXPECTED_TEST_DATABASE_HOST` |
-| TEST fingerprint guard | AC-012a passes: hostname(`TEST_DATABASE_URL`) == `E2E_EXPECTED_TEST_DATABASE_HOST` |
+| TEST fingerprint guard | AC-012a passes: `E2E_EXPECTED_TEST_DATABASE_HOST` is explicitly provided in the authorized runtime environment (NOT from `.env.example` fallback), and hostname(`TEST_DATABASE_URL`) == `E2E_EXPECTED_TEST_DATABASE_HOST`. Missing fingerprint → STOP with `MISSING_EXPECTED_TEST_FINGERPRINT` |
 | Mutation ordering invariant | AC-019 + AC-037b pass: no SQL mutation before Phase A target certification |
 | SAFE post-spawn target confirmation | AC-017 passes: Phase B sentinel visible via public read path. AC-017a passes: no write-based probe through the application |
 | Parent DATABASE_URL contamination refused | AC-018 + AC-037 pass: parent `DATABASE_URL=file:...` is NEUTRALIZED; child receives TEST; no mutation before certification |
@@ -903,7 +908,7 @@ MUTATE target
 1. Parse `.env.local` via `parseEnvLocal()`
 2. Read `TEST_DATABASE_URL`
 3. Validate URL type/scheme (`postgresql://` only; reject `file:`, `mysql:`, etc.)
-4. Positive TEST fingerprint comparison (`hostname(TEST_DATABASE_URL) == E2E_EXPECTED_TEST_DATABASE_HOST`)
+4. Positive TEST fingerprint comparison: `E2E_EXPECTED_TEST_DATABASE_HOST` is explicitly provided in the authorized runtime environment (NOT from `.env.example` fallback, NOT inferred from `TEST_DATABASE_URL` itself), and `hostname(TEST_DATABASE_URL) == E2E_EXPECTED_TEST_DATABASE_HOST`
 5. Read-only refuse-non-TEST guards (`hostname != DEV host`, `hostname != PROD host`)
 6. Read-only connectivity probe (`SELECT 1 AS one`)
 7. Read-only identity probe (`SELECT current_database() AS db`)
@@ -937,7 +942,21 @@ Recommended work branch for S10 (per owner §51): `wp/005-e2e-test-infrastructur
 
 This branch is NOT created during S9. S10 creates it after OWNER APPROVE + AUTHORIZE.
 
-The branch is created from `dev` at `6278315929868210ed9ac96a80748e6f471b0c25` (the canonical dev head AFTER the approved S9 contract was committed — the previous stale baseline `484898e5b513d1313f458880a6fc6b32175aa990` was the dev head BEFORE the S9 contract; S10 MUST include the approved S9 contract baseline, so the branch MUST be created from `6278315`).
+**FINAL S10 BRANCH BASE (frozen):** `6dd5b337449f266b436b46420061d887cd51c0b1`.
+
+This is the canonical dev head AFTER this final S9 patch operation. S10 MUST branch from this exact SHA — it contains BOTH the original WP-005 S9 contract (committed at `6278315`) AND the final target-verification hardening patch (committed at `6dd5b33`). The implementation branch must contain both; branching from `6278315` would miss the hardening patch and is FORBIDDEN.
+
+Historical references to `6278315` may remain only when clearly labeled as HISTORICAL PRE-PATCH state (e.g., in §1 Contract Status, §19 S9 Final State). Every instruction that tells S10 to branch from `6278315` (or any other commit) is REMOVED — the only valid implementation baseline is `6dd5b33`.
+
+**Branch creation precondition (per owner §2 — freeze baseline verification):** Before S10 branch creation, the implementation procedure MUST verify:
+
+```
+dev local = dev remote = 6dd5b337449f266b436b46420061d887cd51c0b1
+worktree  = CLEAN
+main      = 0bc77a783c8efc1ba6056c67b5a5e290dd26ee4d
+```
+
+Only after this verification passes may S10 create `wp/005-e2e-test-infrastructure` from `6dd5b33`. If `dev` differs from `6dd5b33` (local OR remote): **STOP** and report `CANONICAL STATE DIVERGENCE`. Do NOT silently branch from another commit.
 
 After S11 PASS + OWNER ACCEPT + closure, S10 work is fast-forward merged to `dev` (per established convention: `git merge --ff-only wp/005-e2e-test-infrastructure`). The work branch is RETAINED (not deleted), matching the convention established for WP-001 through WP-004.
 
@@ -956,13 +975,14 @@ After this S9 operation:
 | CI (`.github/`) | UNCHANGED (no CI workflow created) |
 | Vercel | UNCHANGED (no Vercel config) |
 | `main` branch | UNCHANGED (still `0bc77a7`) |
-| `dev` branch | UNCHANGED (still `6278315` — initial S9 contract committed at `6278315`; this patch operation adds a new commit on top of `6278315`) |
+| `dev` branch | UNCHANGED — initial S9 contract at `6278315` (HISTORICAL), hardening patch at `6dd5b33` (HISTORICAL), this final patch adds a new commit on top of `6dd5b33`; the dev head AFTER this final patch is the FINAL S10 BRANCH BASE |
 | Worktree | CLEAN |
 | WP-005 implementation | NOT STARTED |
 | Playwright | NOT installed (S10 will install) |
 | `playwright.config.ts` | NOT created (S10 will create) |
 | `tests/e2e/` | NOT created (S10 will create) |
 | `pnpm test:e2e` script | NOT added (S10 will add) |
+| `E2E_EXPECTED_TEST_DATABASE_HOST` | NOT committed to repo; `.env.example` MAY document the variable name and its purpose but MUST NOT be the authoritative runtime source; the actual authorized runtime value is supplied by the execution environment (`.env.local` for local developer runs, or explicitly injected process env for CI) |
 
 **Only canonical contract documentation changes:** `docs/planning/work-packages/WP-005-E2E-TEST-INFRASTRUCTURE.md` (this file).
 
@@ -972,9 +992,9 @@ After this S9 operation:
 
 | File | Action | Notes |
 |---|---|---|
-| `docs/planning/work-packages/WP-005-E2E-TEST-INFRASTRUCTURE.md` | CREATED (initial S9) + PATCHED (this S9 patch operation) | This contract (documentation-only) |
+| `docs/planning/work-packages/WP-005-E2E-TEST-INFRASTRUCTURE.md` | CREATED (initial S9) + PATCHED (S9 patch 1: harden E2E target verification) + FINAL-PATCHED (S9 patch 2: freeze S10 baseline and test fingerprint — this patch) | This contract (documentation-only) |
 
-No other files are modified, created, or deleted by S9 (initial or this patch).
+No other files are modified, created, or deleted by S9 (initial, patch 1, or this final patch).
 
 ---
 
