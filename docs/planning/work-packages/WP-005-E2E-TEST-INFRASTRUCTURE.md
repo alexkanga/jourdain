@@ -7,13 +7,14 @@
 | WP ID | WP-005 |
 | Name | E2E Test Infrastructure |
 | Source Milestone | MS-005 — E2E Integration + Hardening (DELIVERY_ROADMAP §7) |
-| Status | DRAFT (FINAL PATCHED) — PENDING OWNER APPROVAL + AUTHORIZATION |
-| Canonical dev SHA (at S9 start) | `484898e5b513d1313f458880a6fc6b32175aa990` |
-| Canonical dev SHA (after initial S9 contract) | `6278315929868210ed9ac96a80748e6f471b0c25` (HISTORICAL PRE-PATCH — not the S10 branch base) |
-| Canonical dev SHA (after S9 hardening patch) | `6dd5b337449f266b436b46420061d887cd51c0b1` (HISTORICAL PRE-FINAL-PATCH — not the S10 branch base) |
-| FINAL S10 BRANCH BASE (frozen) | `6dd5b337449f266b436b46420061d887cd51c0b1` (the dev head AFTER this final S9 patch — S10 MUST branch from this exact SHA, including BOTH the original S9 contract AND the final target-verification hardening) |
-| S9 patch operations | 2 (patch 1: harden E2E target verification contract; patch 2: freeze S10 baseline and test fingerprint — this patch) |
+| Status | DRAFT (FINAL BASELINE CORRECTED) — PENDING OWNER APPROVAL + AUTHORIZATION |
+| Canonical dev SHA (at S9 start) | `484898e5b513d1313f458880a6fc6b32175aa990` (HISTORICAL — pre-S9) |
+| Canonical dev SHA (after initial S9 contract) | `6278315929868210ed9ac96a80748e6f471b0c25` (HISTORICAL — original WP-005 S9 contract commit) |
+| Canonical dev SHA (after S9 hardening patch 1) | `6dd5b337449f266b436b46420061d887cd51c0b1` (HISTORICAL — first hardening patch / previous dev head) |
+| Canonical dev SHA (after S9 hardening patch 2) | `dacd47d2f4deb457d30af304dfbde099729be24b` (HISTORICAL — fingerprint fail-closed patch / previous dev head) |
 | Canonical main SHA (at S9 start) | `0bc77a783c8efc1ba6056c67b5a5e290dd26ee4d` |
+| S9 patch operations | 3 (patch 1: harden E2E target verification; patch 2: freeze S10 baseline and test fingerprint; patch 3: align S10 baseline with final contract head — this patch) |
+| FINAL S10 BRANCH BASE (semantic rule) | S10 MUST branch from the OWNER-approved current dev HEAD containing this final contract. The concrete SHA is recorded in the closure report (NOT hardcoded in the contract itself — that would create a recursive SHA-update loop, because this patch commit itself becomes the new HEAD). |
 | Source Charter (S4) | `docs/planning/PROJECT_CHARTER.md` at `fa377c1` |
 | Source Product Requirements (S5) | `docs/product/PRODUCT_REQUIREMENTS.md` at `9ec4a08` |
 | Source Technical Specification (S6) | `docs/architecture/TECHNICAL_SPECIFICATION.md` at `7c85323` |
@@ -942,21 +943,39 @@ Recommended work branch for S10 (per owner §51): `wp/005-e2e-test-infrastructur
 
 This branch is NOT created during S9. S10 creates it after OWNER APPROVE + AUTHORIZE.
 
-**FINAL S10 BRANCH BASE (frozen):** `6dd5b337449f266b436b46420061d887cd51c0b1`.
+**FINAL S10 BRANCH BASE (semantic rule — authoritative):**
 
-This is the canonical dev head AFTER this final S9 patch operation. S10 MUST branch from this exact SHA — it contains BOTH the original WP-005 S9 contract (committed at `6278315`) AND the final target-verification hardening patch (committed at `6dd5b33`). The implementation branch must contain both; branching from `6278315` would miss the hardening patch and is FORBIDDEN.
+S10 MUST branch from the OWNER-approved current dev HEAD containing this final contract.
 
-Historical references to `6278315` may remain only when clearly labeled as HISTORICAL PRE-PATCH state (e.g., in §1 Contract Status, §19 S9 Final State). Every instruction that tells S10 to branch from `6278315` (or any other commit) is REMOVED — the only valid implementation baseline is `6dd5b33`.
+The concrete SHA of that HEAD is recorded in the S9 closure report (the final response of this S9 operation), NOT hardcoded in the contract itself. Hardcoding a specific SHA in the contract would create a recursive SHA-update loop, because the patch commit that contains the SHA itself becomes the new HEAD — requiring another commit to update the SHA, ad infinitum. The semantic rule is authoritative and avoids this loop.
 
-**Branch creation precondition (per owner §2 — freeze baseline verification):** Before S10 branch creation, the implementation procedure MUST verify:
+**Rationale (per owner §6):** The correct procedure is:
+1. Patch the contract (replace any stale hardcoded S10 baseline SHA with the semantic rule).
+2. Commit the patch.
+3. Obtain the resulting commit SHA (this becomes the new canonical dev HEAD).
+4. The closure report records that resulting HEAD as the canonical approved S10 baseline.
+
+The contract therefore does NOT contain a concrete final S10 branch-base SHA. It contains the semantic rule that points to the current dev HEAD at the time of OWNER approval.
+
+**Historical SHA classification (per owner §2):**
+
+The following SHAs may appear ONLY as historical references (clearly labeled HISTORICAL), NEVER as S10 branch-base instructions:
+
+- `6278315929868210ed9ac96a80748e6f471b0c25` — original WP-005 S9 contract commit (HISTORICAL)
+- `6dd5b337449f266b436b46420061d887cd51c0b1` — first WP-005 hardening patch / previous dev head (HISTORICAL)
+- `dacd47d2f4deb457d30af304dfbde099729be24b` — fingerprint fail-closed patch / previous dev head (HISTORICAL, before this baseline correction patch)
+
+No instruction in this contract tells S10 to branch from any of these SHAs. The only valid implementation baseline is the OWNER-approved current dev HEAD at the time of S10 authorization.
+
+**Branch creation precondition (per owner §3 — freeze baseline verification):** Before S10 branch creation, the implementation procedure MUST verify:
 
 ```
-dev local = dev remote = 6dd5b337449f266b436b46420061d887cd51c0b1
+dev local = dev remote = OWNER-approved current dev HEAD (concrete SHA recorded in the S9 closure report)
 worktree  = CLEAN
 main      = 0bc77a783c8efc1ba6056c67b5a5e290dd26ee4d
 ```
 
-Only after this verification passes may S10 create `wp/005-e2e-test-infrastructure` from `6dd5b33`. If `dev` differs from `6dd5b33` (local OR remote): **STOP** and report `CANONICAL STATE DIVERGENCE`. Do NOT silently branch from another commit.
+Only after this verification passes may S10 create `wp/005-e2e-test-infrastructure` from the OWNER-approved current dev HEAD. If `dev` differs from the OWNER-approved HEAD (local OR remote): **STOP** and report `CANONICAL STATE DIVERGENCE`. Do NOT silently branch from another commit.
 
 After S11 PASS + OWNER ACCEPT + closure, S10 work is fast-forward merged to `dev` (per established convention: `git merge --ff-only wp/005-e2e-test-infrastructure`). The work branch is RETAINED (not deleted), matching the convention established for WP-001 through WP-004.
 
@@ -975,7 +994,7 @@ After this S9 operation:
 | CI (`.github/`) | UNCHANGED (no CI workflow created) |
 | Vercel | UNCHANGED (no Vercel config) |
 | `main` branch | UNCHANGED (still `0bc77a7`) |
-| `dev` branch | UNCHANGED — initial S9 contract at `6278315` (HISTORICAL), hardening patch at `6dd5b33` (HISTORICAL), this final patch adds a new commit on top of `6dd5b33`; the dev head AFTER this final patch is the FINAL S10 BRANCH BASE |
+| `dev` branch | UNCHANGED — the S9 contract + patch 1 + patch 2 + patch 3 (this baseline correction) form a linear history on `dev`; the dev HEAD after this final patch is the canonical S10 branch base per the semantic rule in §18 (concrete SHA recorded in the S9 closure report, NOT hardcoded here to avoid a recursive SHA-update loop) |
 | Worktree | CLEAN |
 | WP-005 implementation | NOT STARTED |
 | Playwright | NOT installed (S10 will install) |
@@ -992,9 +1011,9 @@ After this S9 operation:
 
 | File | Action | Notes |
 |---|---|---|
-| `docs/planning/work-packages/WP-005-E2E-TEST-INFRASTRUCTURE.md` | CREATED (initial S9) + PATCHED (S9 patch 1: harden E2E target verification) + FINAL-PATCHED (S9 patch 2: freeze S10 baseline and test fingerprint — this patch) | This contract (documentation-only) |
+| `docs/planning/work-packages/WP-005-E2E-TEST-INFRASTRUCTURE.md` | CREATED (initial S9) + PATCHED (patch 1: harden E2E target verification) + PATCHED (patch 2: freeze S10 baseline and test fingerprint) + BASELINE-CORRECTED (patch 3: align S10 baseline with final contract head — this patch) | This contract (documentation-only) |
 
-No other files are modified, created, or deleted by S9 (initial, patch 1, or this final patch).
+No other files are modified, created, or deleted by S9 (initial, patch 1, patch 2, or this baseline-correction patch 3).
 
 ---
 
