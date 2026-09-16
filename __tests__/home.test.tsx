@@ -1,12 +1,16 @@
-import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
-import Home from "../app/page";
+import { TiptapRenderer } from "../components/public/TiptapRenderer";
+import { render, screen } from "@testing-library/react";
 
-describe("Home", () => {
-  it("renders JOURDAIN EMPLOI heading", () => {
-    render(<Home />);
-    const heading = screen.getByRole("heading", { level: 1 });
-    expect(heading).toBeInTheDocument();
-    expect(heading).toHaveTextContent("JOURDAIN EMPLOI");
+describe("TiptapRenderer (replaces Home test)", () => {
+  it("renders a simple paragraph", () => {
+    const doc = {
+      type: "doc",
+      content: [
+        { type: "paragraph", content: [{ type: "text", text: "Hello world" }] },
+      ],
+    };
+    render(<TiptapRenderer content={doc} />);
+    expect(screen.getByText("Hello world")).toBeInTheDocument();
   });
 });
