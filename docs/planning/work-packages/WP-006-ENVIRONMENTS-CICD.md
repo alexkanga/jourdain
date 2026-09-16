@@ -125,23 +125,24 @@ Five execution targets per AISE S0 v0.2 §26:
 
 | Gate | Execution Target | Cost Class | DB Required | DB Mutation | Secrets Required | Vercel Invocation | Frequency | Retry | Timeout | Blocking |
 |---|---|---|---|---|---|---|---|---|---|---|
-| lint | LOCAL (GitHub Actions runner) | LOCAL_UNMETERED | NO | NO | NO | NO | Every PR + push to dev/main | 0 | 5 min | BLOCKING |
-| typecheck | LOCAL (GitHub Actions runner) | LOCAL_UNMETERED | NO | NO | NO | NO | Every PR + push to dev/main | 0 | 5 min | BLOCKING |
-| Vitest (149 tests) | LOCAL (GitHub Actions runner) | LOCAL_UNMETERED | NO (unit/component) / YES (integration — TEST_DATABASE_URL) | YES (integration tests create/clean fixtures on TEST) | TEST_DATABASE_URL, E2E_EXPECTED_TEST_DATABASE_HOST, BETTER_AUTH_SECRET, INITIAL_ADMIN_*, FANTOMAS_* | NO | Every PR + push to dev/main | 0 | 10 min | BLOCKING |
-| build | LOCAL (GitHub Actions runner) | LOCAL_UNMETERED | NO | NO | NO | NO | Every PR + push to dev/main | 0 | 10 min | BLOCKING |
-| Playwright E2E (101 tests) | LOCAL (GitHub Actions runner spawns local Next.js) | LOCAL_UNMETERED (app runtime) + CONTROLLED_TEST (TEST DB) | YES (TEST_DATABASE_URL) | YES (fixtures on TEST) | TEST_DATABASE_URL, E2E_EXPECTED_TEST_DATABASE_HOST, BETTER_AUTH_SECRET, BETTER_AUTH_URL, INITIAL_ADMIN_*, FANTOMAS_* | NO | Push to main + opt-in via `run-e2e` label on PR | 0 | 15 min | BLOCKING (main) / NON-BLOCKING (PR opt-in) |
+| lint | LOCAL (GitHub Actions runner) | LOCAL_UNMETERED | NO | NO | NO | **0** | PR to dev + push to dev/main | 0 | 5 min | BLOCKING |
+| typecheck | LOCAL (GitHub Actions runner) | LOCAL_UNMETERED | NO | NO | NO | **0** | PR to dev + push to dev/main | 0 | 5 min | BLOCKING |
+| Vitest (149 tests) | LOCAL (GitHub Actions runner) | LOCAL_UNMETERED + CONTROLLED_TEST (integration) | YES (integration — TEST_DATABASE_URL) | YES (integration tests create/clean fixtures on TEST) | TEST_DATABASE_URL, BETTER_AUTH_SECRET, INITIAL_ADMIN_PASSWORD, FANTOMAS_INITIAL_PASSWORD (secrets); E2E_EXPECTED_TEST_DATABASE_HOST, INITIAL_ADMIN_LOGIN, INITIAL_ADMIN_EMAIL, FANTOMAS_EMAIL, BETTER_AUTH_URL (non-secret vars) | **0** | PR to dev + push to dev/main | 0 | 10 min | BLOCKING |
+| build | LOCAL (GitHub Actions runner) | LOCAL_UNMETERED | NO | NO | NO | **0** | PR to dev + push to dev/main | 0 | 10 min | BLOCKING |
+| Playwright E2E (101 tests) | LOCAL (GitHub Actions runner spawns local Next.js) | LOCAL_UNMETERED (app) + CONTROLLED_TEST (TEST DB) | YES (TEST_DATABASE_URL) | YES (fixtures on TEST) | Same secrets as Vitest + BETTER_AUTH_URL (non-secret) | **0** | Push to dev + opt-in via `run-e2e` label on PR + `workflow_dispatch` | 0 | 15 min | BLOCKING (dev) / NON-BLOCKING (PR opt-in) |
 
 **CI Playwright policy: OPTION A — run 101 Playwright tests in GitHub Actions against a LOCAL Next.js process and positively verified TEST database.**
 
 Rationale:
 - The existing E2E infrastructure (WP-005) is designed for LOCAL app + TEST DB. It spawns `next start --port 3100` with a curated child env (no inherited parent DATABASE_URL). This works identically inside a GitHub Actions runner.
+- **ZERO Vercel invocation.** CI E2E does NOT use Vercel Preview or Production. CI is independent of Vercel.
 - No Vercel E2E, no Preview E2E (per quota-safety).
 - The runner uses the existing `resolveAuthorizedE2EBaseUrl()` + `certifyTestTarget()` — the same fail-closed guards that work locally.
 - Chromium-only (per WP-005); Playwright installs only Chromium in CI.
-- TEST_DATABASE_URL + E2E_EXPECTED_TEST_DATABASE_HOST supplied as GitHub Actions secrets (NOT committed).
+- TEST_DATABASE_URL + E2E_EXPECTED_TEST_DATABASE_HOST supplied as GitHub Actions secrets/variables (NOT committed).
 - Single worker, 0 retries (per WP-005 config).
 - Fixture cleanup: E2E_ title marker, exact UUID deletion, orphan recovery (per WP-005).
-- Bootstrap: CI runs `pnpm db:bootstrap` with DATABASE_URL=TEST_DATABASE_URL (idempotent — creates admin1/fantomas only if missing).
+- Bootstrap: CI runs `pnpm db:bootstrap` with DATABASE_URL=TEST_DATABASE_URL ONLY for E2E job, AFTER positive TEST target certification (idempotent — creates admin1/fantomas only if missing).
 - Mutation accounting: TEST_MUTATED=YES (fixtures + rateLimit cleanup + idempotent bootstrap); DEV_MUTATED=NO; PRODUCTION_TOUCHED=NO.
 
 **CI Database target: existing Neon TEST branch (NOT a generic PostgreSQL service container).**
@@ -152,34 +153,65 @@ Rationale:
 - S9 does NOT prescribe a generic PostgreSQL service container.
 - The existing TEST_DATABASE_URL (Neon test branch `ep-gentle-rice-b1vxvfsf`) is the canonical CI test database target. It is already used by local Vitest integration tests and Playwright E2E.
 
+**Shared TEST DB concurrency:** The 101 Playwright tests mutate the single shared Neon TEST environment. Per-branch concurrency is NOT sufficient. See §5.15 for the global mutex concurrency group.
+
 ### 5.3 GitHub Actions Workflow Design
 
 **Minimum number of workflows: ONE** — `.github/workflows/ci.yml`.
 
-Rationale: avoid workflow proliferation. A single workflow with conditional jobs based on event type (PR vs push to main) is simpler and more maintainable.
+Rationale: avoid workflow proliferation. A single workflow with conditional jobs based on event type (PR vs push) is simpler and more maintainable.
 
-**Triggers:**
-- `on: pull_request` (targets: dev) — runs lint + typecheck + Vitest + build
-- `on: push: branches: [main]` — runs lint + typecheck + Vitest + build + Playwright E2E
-- `on: workflow_dispatch` — manual trigger (for debugging; same gates as push to main)
+**Triggers (frozen — must match actual AISE git governance):**
+- `on: pull_request` (targets: dev) — runs fast/non-mutating CI: lint + typecheck + build (NO Vitest integration, NO E2E — avoids duplicate TEST DB mutation with push-to-dev)
+- `on: push: branches: [dev]` — runs canonical integration CI: lint + typecheck + Vitest (149) + build (this is the canonical integration gate — AISE fast-forwards verified WP branches directly into dev)
+- `on: push: branches: [main]` — runs lint + typecheck + Vitest (149) + build (same as dev; NO automatic Production deployment per §5.4)
+- `on: workflow_dispatch` — manual trigger (runs full CI including optional E2E)
+
+**Full E2E trigger policy (frozen):**
+- Full 101-test Playwright E2E runs ONLY on:
+  - `push: branches: [dev]` (canonical integration — the primary E2E gate)
+  - Opt-in via `run-e2e` label on PR to dev (maintainer-controlled)
+  - `workflow_dispatch` (manual trigger for debugging)
+- Full E2E does NOT run on:
+  - Every PR (cost control)
+  - Every push to main (avoid redundant E2E for the same logical change already verified on dev)
+  - Every trivial commit (E2E is the canonical integration gate, not the commit gate)
+- **NO duplicate full E2E**: the same logical change should NOT trigger 101 E2E twice. The canonical path is: PR (fast CI) → merge to dev (full CI + E2E) → ff-merge to main (CI without E2E). If a PR has the `run-e2e` label, E2E runs on the PR AND on push to dev — but the PR E2E is NON-BLOCKING (informational), and the dev E2E is BLOCKING.
 
 **Branches:**
 - PRs target `dev` (the canonical development integration branch)
-- Pushes to `main` trigger the full gate including E2E
+- Pushes to `dev` trigger the full canonical integration gate (lint + typecheck + Vitest + build + E2E)
+- Pushes to `main` trigger CI validation (lint + typecheck + Vitest + build) but NOT E2E (already verified on dev) and NOT Production deployment (per §5.4)
 - wp/* branches do NOT trigger CI directly (PRs from wp/* to dev trigger CI)
 
 **PR E2E opt-in:**
-- E2E job conditional on `github.event.pull_request.label.name == 'run-e2e'` (per S6 TD-025)
+- E2E job conditional on `contains(github.event.pull_request.labels.*.name, 'run-e2e')` (per S6 TD-025)
 - Default: E2E NOT run on PRs (cost control)
-- E2E always run on push to `main`
+- E2E runs on push to dev (canonical integration)
+- E2E runs on `workflow_dispatch` (manual trigger)
 
-**Permissions:**
+**Permissions (frozen — minimal):**
 - `permissions: contents: read` (minimal — only read the repository)
 - No `write` permissions (no auto-deployment, no auto-merge)
 - No `pull-requests: write` (no auto-comment)
+- No deployment token in CI
+- No Vercel Production token in CI
+- E2E does NOT require repository write access
 
-**Concurrency:**
-- `concurrency: group: ci-${{ github.ref }}, cancel-in-progress: true` — cancel superseded runs on the same branch
+**Concurrency — TWO levels (frozen):**
+
+**A. Non-mutating CI (lint, typecheck, Vitest, build):**
+- `concurrency: group: ci-${{ github.ref }}, cancel-in-progress: true` — cancel superseded runs on the same branch (normal per-branch concurrency)
+
+**B. Mutating E2E against shared Neon TEST (101 Playwright tests):**
+- `concurrency: group: jourdain-shared-test-e2e, cancel-in-progress: false` — ONE GLOBAL MUTEX across ALL branches and events
+- At most ONE E2E job using shared TEST at a time
+- NO parallel E2E across separate PRs
+- NO parallel PR/main/manual E2E
+- NO two jobs clearing rateLimit simultaneously
+- NO two bootstrap/fixture lifecycles overlapping
+- `cancel-in-progress: false` — a running test is NOT arbitrarily killed mid-mutation (queued jobs wait for the mutex)
+- Timeout: 15 min per E2E job (prevents indefinite lock)
 
 **Timeouts:**
 - Job-level: lint 5 min, typecheck 5 min, Vitest 10 min, build 10 min, E2E 15 min
@@ -189,39 +221,115 @@ Rationale: avoid workflow proliferation. A single workflow with conditional jobs
 - 0 retries (no flake masking; consistent with WP-005 Playwright config)
 - If a gate fails, the developer fixes the root cause
 
+**Secret vs non-secret CI classification (frozen):**
+
+GitHub Actions **secrets** (encrypted, not visible in logs):
+- `TEST_DATABASE_URL` — SECRET
+- `BETTER_AUTH_SECRET` — SECRET (TEST-specific value)
+- `INITIAL_ADMIN_PASSWORD` — SECRET (TEST-specific value)
+- `FANTOMAS_INITIAL_PASSWORD` — SECRET (TEST-specific value)
+
+GitHub Actions **variables** (non-secret, visible in logs, reusable across workflows):
+- `E2E_EXPECTED_TEST_DATABASE_HOST` — NON-SECRET (identifies DB host, not credentials)
+- `INITIAL_ADMIN_LOGIN` — NON-SECRET (`admin1`)
+- `INITIAL_ADMIN_EMAIL` — NON-SECRET (`admin1@jourdain.local`)
+- `FANTOMAS_EMAIL` — NON-SECRET (`fantomas@jourdain.local`)
+- `BETTER_AUTH_URL` — NON-SECRET (`http://127.0.0.1:3100` for CI local Next.js)
+
 **Secret boundaries:**
-- GitHub Actions secrets: TEST_DATABASE_URL, E2E_EXPECTED_TEST_DATABASE_HOST, BETTER_AUTH_SECRET, BETTER_AUTH_URL (TEST-specific), INITIAL_ADMIN_PASSWORD, FANTOMAS_INITIAL_PASSWORD, INITIAL_ADMIN_EMAIL, FANTOMAS_EMAIL
 - NO PRODUCTION secrets in GitHub Actions (PROD_DATABASE_URL, production BETTER_AUTH_SECRET, production passwords — NEVER in CI)
 - Secrets are NOT printed, NOT logged, NOT committed
+- A CI pass must be possible with ZERO Vercel invocation and ZERO Production secret access
 
 ### 5.4 Vercel Architecture
 
 **Vercel project required: YES** (per S8 MS-006 + TD-019 + Charter §10).
 
-**Vercel-GitHub integration:**
-- Vercel project linked to the GitHub repository `alexkanga/jourdain`
-- Framework preset: Next.js (auto-detected)
-- Build command: `pnpm build`
-- Output directory: `.next` (auto-detected)
-- Install command: `pnpm install --frozen-lockfile`
+**FIRST VERCEL DEPLOYMENT SAFETY — MANDATORY S10 PREFLIGHT (frozen):**
 
-**Neon-Vercel integration:**
-- Neon project connected to Vercel via Neon-Vercel integration
-- Neon main branch = Production
-- Neon preview branches auto-provisioned per PR (one per Vercel Preview deployment, ephemeral, deleted when Preview is deleted)
+Before importing/linking the Git repository to Vercel, S10 MUST determine whether the chosen creation/link procedure can itself generate an initial Production deployment.
 
-**Branch-to-deployment mapping:**
+- If YES or UNKNOWN: **STOP**. Do NOT create/import/link the project until a supported no-Production procedure is established.
+- UNKNOWN → INVESTIGATE. Never: UNKNOWN → TRY IT ON PRODUCTION.
+- No initial Production deployment is authorized in WP-006.
 
-| Git Branch | Vercel Environment | Neon Branch | Auto-Deploy? |
-|---|---|---|---|
-| `wp/*` (work branches) | NO Vercel deployment | NO Neon branch | NO — wp/* do NOT get Vercel Preview by default |
-| `dev` | Preview (controlled) | Neon preview branch (or DEV Neon branch) | LIMITED — Preview enabled if justified; NOT an automated test target |
-| `main` | Production candidate | Neon main branch | Production deployment ONLY under explicit OWNER PROD GO (S13) |
+**STOP CONDITION:** `VERCEL_PRODUCTION_AUTO_DEPLOY_NOT_SAFELY_DISABLED` — if a safe configuration cannot be established before connecting Git, STOP.
 
-**Preview policy (quota-safe, frozen):**
-- `wp/*` branches: NO automatic Vercel Preview. This prevents unbounded Preview deployments for every work branch. Work branches are verified via LOCAL CI (lint + typecheck + Vitest + build + optional E2E), NOT via Vercel Preview.
-- `dev` branch: LIMITED Preview — a Preview deployment is created when a PR merges to `dev`, but it is NOT an automated test target. It is for manual human review only.
-- `main` branch: Production mapping — Vercel Production environment is configured (env vars set) but NOT deployed until OWNER PROD GO.
+**Vercel Production pre-S13 policy (frozen — technically enforceable):**
+
+During MS-006 (before OWNER PROD GO / S13):
+- `main` push MUST NOT create a Production deployment.
+- The Vercel Production Branch MUST be set to a non-release placeholder (e.g., a branch named `production-disabled` or `no-deploy`) until S13.
+- Alternatively, S10 may use another Vercel-supported configuration that demonstrably prevents `main → Production` deployment.
+- This is NOT a verbal policy — it MUST be a technical mechanism verified by S11.
+- After future OWNER PROD GO / S13, the Production mapping may be changed to `main → Production` under a separate authorized operation.
+
+**STOP CONDITION:** `VERCEL_PRODUCTION_AUTO_DEPLOY_NOT_SAFELY_DISABLED` — if Vercel cannot provide the required suppression, STOP before linking Git.
+
+**wp/* Preview enforcement (frozen — technically enforceable):**
+
+A simple policy sentence is insufficient because Git-connected Vercel normally creates Preview deployments for non-Production branches. S10 MUST configure the supported enforcement mechanism:
+- Vercel Project Settings → Git → Ignored Build Step: configure to skip builds for `wp/*` branches (e.g., using a build script that exits with code 0 for `wp/*` branches, or Vercel's branch ignore list).
+- Acceptance criteria MUST prove: push to `wp/006-environments-cicd` does NOT create a Vercel Preview deployment.
+- Acceptance criteria MUST prove: future `wp/*` branches do NOT automatically create Preview deployments.
+- No Vercel runtime should be consumed by normal WP pushes.
+
+**STOP CONDITION:** `WP_BRANCH_PREVIEW_SUPPRESSION_GAP` — if Vercel cannot provide the required branch suppression cleanly, STOP.
+
+**dev Preview policy (frozen — LIMITED definition):**
+
+- `dev` is the ONLY automatically eligible Preview/integration branch during MS-006.
+- Preview is for bounded human validation only.
+- NO automated Playwright against it.
+- NO polling.
+- NO load tests.
+- NO synthetic monitoring loops.
+- Docs-only changes SHOULD avoid unnecessary deployment when safely configurable (Vercel's "Ignored Build Step" can be configured to skip docs-only changes if justified).
+- Deployment frequency must remain bounded (one deployment per eligible push to dev).
+- Technical branch filtering: Vercel Preview Branches = `[dev]` only (all other non-Production branches excluded via Vercel branch configuration).
+
+**Branch-to-deployment mapping (frozen):**
+
+| Git Branch | Vercel Environment | Neon Branch | Auto-Deploy? | Vercel Invocations |
+|---|---|---|---|---|
+| `wp/*` (work branches) | NO Vercel deployment | NO Neon branch | NO — suppressed via Vercel Ignored Build Step | **0** |
+| `dev` | Preview (LIMITED) | Neon **dev** branch (existing — NOT auto-provisioned per PR) | YES (bounded — one deployment per eligible push to dev) | Bounded (1 deployment event per eligible push) |
+| `main` (pre-S13) | NO Production deployment | Neon main branch (configured but NOT deployed) | NO — Production Branch = placeholder until S13 | **0** |
+| `main` (post-S13) | Production | Neon main branch | YES — ONLY under OWNER PROD GO (S13) | 1 deployment event (separate authorization) |
+
+**Neon-Vercel integration — NO auto-provisioned per-PR branches (frozen):**
+
+The previous draft's "Neon preview branches auto-provisioned per PR" is REMOVED. This conflicts with:
+- wp/* Preview OFF (no Vercel Preview for wp/* → no Neon preview branch for wp/*)
+- The anti-proliferation doctrine (no one Neon branch per wp/* or PR)
+
+**DEV PREVIEW DATABASE TARGET (frozen — ONE model):**
+
+The dev Vercel Preview uses the **existing Neon dev branch** (`DEV_DATABASE_URL`). This is option A (existing Neon dev branch) — the simplest and safest choice. No new Neon branch is created for Preview during S9 or S10. The dev Preview database MUST NOT be Production (Neon main). The dev Preview database MUST NOT be TEST (Neon test — that is the CI automated test target, not a human review target).
+
+If a dedicated Preview branch is desired in the future, it is recorded as a future explicit OWNER/manual S10 action — but the default is the existing Neon dev branch.
+
+**No per-PR Neon DB branch creation. No per-wp/* Neon DB branch creation.**
+
+**Vercel build database mutation — FORBIDDEN (frozen):**
+
+A Vercel build MUST NOT automatically execute:
+- migration (`drizzle-kit migrate`)
+- bootstrap (`pnpm db:bootstrap`)
+- seed
+- reset
+- fixture creation
+
+against DEV, Preview, TEST, or Production.
+
+Build must remain application build/deployment work only. Any DB mutation must be:
+- explicit
+- target-certified
+- separately authorized
+- observable
+- bounded
+
+This means: Vercel's Build Command = `pnpm build` ONLY. No `pnpm db:migrate` or `pnpm db:bootstrap` in the Vercel build command.
 
 **Vercel Hobby quota protections (frozen):**
 - NO full Playwright against Vercel (Preview or Production)
@@ -233,9 +341,12 @@ Rationale: avoid workflow proliferation. A single workflow with conditional jobs
 - NO cron loops
 - NO recursive deployments
 - NO unbounded retries
-- NO unnecessary wp/* Preview deployments
-- NO duplicate Preview deployments
+- NO wp/* Preview deployments (suppressed via Vercel Ignored Build Step)
+- NO duplicate Preview deployments (dev is the only eligible branch)
 - NO duplicate CI executions (concurrency group with cancel-in-progress)
+- NO per-PR Neon branch auto-provisioning (removed)
+- NO Vercel build DB mutation (forbidden)
+- NO main → Production auto-deploy before S13 (Production Branch = placeholder)
 
 ### 5.5 Remote Smoke Policy
 
@@ -317,55 +428,62 @@ Per AISE S0 v0.2 §26 + WP-005 §5.6:
 | Environment | Neon Branch | Variable | Purpose |
 |---|---|---|---|
 | PRODUCTION | Neon main branch | PROD_DATABASE_URL (aliased as DATABASE_URL in Vercel Production env) | Production data — NEVER touched by Preview, local, or CI |
-| PREVIEW | Neon preview branch (auto-provisioned per PR) | DATABASE_URL in Vercel Preview env | Preview data — isolated per PR, ephemeral |
-| DEV-INTEGRATION | Neon dev branch | DEV_DATABASE_URL | Shared development DB for manual browsing (optional) |
+| PREVIEW (dev) | Neon **dev** branch (existing — NOT auto-provisioned) | DEV_DATABASE_URL (set as Vercel Preview env DATABASE_URL) | Preview data — shared with DEV; NOT Production; NOT TEST |
+| DEV-INTEGRATION | Neon dev branch | DEV_DATABASE_URL | Shared development DB for manual browsing (optional; same as Preview DB) |
 | TEST | Neon test branch (`ep-gentle-rice-b1vxvfsf`) | TEST_DATABASE_URL | Automated test target (Vitest integration + Playwright E2E) |
 | LOCAL | Developer's local Neon branch OR TEST_DATABASE_URL | DATABASE_URL (runtime alias) | Developer workstation |
 
-**No Neon changes during S9.** The existing Neon branches (main, dev, test) are sufficient. The Neon-Vercel integration auto-provisions preview branches per PR during S10 (when Vercel is configured).
+**No Neon changes during S9.** The existing Neon branches (main, dev, test) are sufficient. No auto-provisioned per-PR Neon branches (removed from previous draft). The dev Vercel Preview uses the existing Neon dev branch.
 
-**Preview database safety:** Preview must NEVER use Production database. Vercel env var isolation enforces this: Preview `DATABASE_URL` = Neon preview branch URL, NOT Neon main branch URL. The Neon-Vercel integration auto-provisions isolated preview branches.
+**Preview database safety:** Preview must NEVER use Production database. Vercel env var isolation enforces this: Preview `DATABASE_URL` = DEV_DATABASE_URL (Neon dev branch), NOT Neon main branch. No per-PR Neon branch auto-provisioning.
 
-**No one Neon branch per WP.** Work branches (`wp/*`) do NOT get Vercel Preview deployments (per §5.4). No Neon preview branch is created for wp/* branches.
+**No one Neon branch per WP.** Work branches (`wp/*`) do NOT get Vercel Preview deployments (per §5.4). No Neon branch is created for wp/* branches.
+
+**No Vercel build DB mutation.** The Vercel build command is `pnpm build` ONLY — no `pnpm db:migrate` or `pnpm db:bootstrap`. See §5.10 and §5.11.
 
 ### 5.10 Migration Policy
 
-**Migration governance:**
+**Migration governance (frozen):**
 
 | Environment | Migration Execution | Who | How |
 |---|---|---|---|
-| TEST | Automatic (CI runs `pnpm db:migrate` with DATABASE_URL=TEST_DATABASE_URL before Vitest integration tests) | CI (GitHub Actions) | `drizzle-kit migrate` (forward migrations only; versioned) |
+| TEST | CI runs `pnpm db:migrate` with DATABASE_URL=TEST_DATABASE_URL before Vitest integration tests (validates migration files + applies to TEST) | CI (GitHub Actions) | `drizzle-kit migrate` (forward migrations only; versioned) |
 | DEV | Manual (operator runs `pnpm db:migrate` with DATABASE_URL=DEV_DATABASE_URL) | Operator | `drizzle-kit migrate` (forward migrations only; versioned) |
-| PREVIEW | Automatic (Vercel Preview build runs migrations against the Neon preview branch) OR manual | Vercel build OR operator | `drizzle-kit migrate` (forward migrations only; versioned) |
+| PREVIEW | **NOT in Vercel build** — manual by operator if needed (Vercel build command = `pnpm build` only) | Operator (explicit, separately authorized) | `drizzle-kit migrate` (forward migrations only; versioned) |
 | PRODUCTION | Manual + OWNER-authorized ONLY | Operator (after OWNER PROD GO) | `drizzle-kit migrate` (forward migrations only; versioned; NEVER `drizzle-kit push`) |
 
 **Rules:**
 - Migrations are generated (`pnpm db:generate`), versioned (committed to `db/migrations/`), and reviewed (PR review).
-- CI validates migrations: `pnpm db:migrate` against TEST_DATABASE_URL (dry-run or actual apply; the integration tests depend on the schema being current).
+- CI validates migration files: `pnpm db:migrate` against TEST_DATABASE_URL before Vitest integration tests (the integration tests depend on the schema being current).
 - CI does NOT apply migrations to DEV or PRODUCTION.
-- Vercel Preview build MAY apply migrations to the Neon preview branch (per Vercel build command configuration — S10 decides).
+- **Vercel build: NO migration execution.** The Vercel build command is `pnpm build` ONLY. No `pnpm db:migrate` in the Vercel build command.
 - Production migrations: applied manually by the operator after OWNER PROD GO. NEVER automatic. NEVER `drizzle-kit push` against Production (per TD-018).
 - No silent Production migration.
+- Future migration execution must be a dedicated explicit operation (not embedded in a build).
 
 ### 5.11 Bootstrap Policy
 
-**Bootstrap governance:**
+**Bootstrap governance (frozen):**
 
 | Environment | Bootstrap Execution | Who | When | Frequency |
 |---|---|---|---|---|
-| TEST | Automatic (CI runs `pnpm db:bootstrap` with DATABASE_URL=TEST_DATABASE_URL before E2E) | CI (GitHub Actions) | Every CI run (E2E job) | Idempotent — creates admin1/fantomas only if missing; does NOT overwrite existing credentials |
-| DEV | Manual (operator runs `pnpm db:bootstrap` with DATABASE_URL=DEV_DATABASE_URL) | Operator | Once after first DEV migration | Idempotent |
-| PREVIEW | Automatic (Vercel Preview build runs `pnpm db:bootstrap`) OR manual | Vercel build OR operator | Once after first Preview migration | Idempotent |
+| TEST | CI runs `pnpm db:bootstrap` with DATABASE_URL=TEST_DATABASE_URL ONLY for E2E job, AFTER positive TEST target certification | CI (GitHub Actions E2E job) | Every E2E run | Idempotent — creates admin1/fantomas only if missing; does NOT overwrite existing credentials |
+| DEV | Manual (operator runs `pnpm db:bootstrap` with DATABASE_URL=DEV_DATABASE_URL) | Operator | Once after first DEV migration (explicit, controlled) | Idempotent |
+| PREVIEW | **NOT in Vercel build** — manual by operator if needed (Vercel build command = `pnpm build` only) | Operator (explicit, separately authorized) | Once after first Preview migration (if any) | Idempotent |
 | PRODUCTION | Manual + OWNER-authorized ONLY | Operator (after OWNER PROD GO + first production deploy) | Once after first production deploy | Idempotent — creates admin1/fantomas only if missing |
 
 **Rules:**
 - Bootstrap is idempotent (verified at WP-002 closure). Running it multiple times does NOT overwrite existing credentials or principalType.
+- **Vercel build: NO bootstrap.** The Vercel build command is `pnpm build` ONLY. No `pnpm db:bootstrap` in the Vercel build command.
+- CI TEST bootstrap runs ONLY for the E2E job, AFTER positive TEST target certification (per WP-005 Phase A invariant — no mutation before certification).
+- DEV/Preview bootstrap must be an explicit controlled operation — NOT every deployment.
+- Production bootstrap: OWNER PROD GO only.
 - Bootstrap credentials (INITIAL_ADMIN_PASSWORD, FANTOMAS_INITIAL_PASSWORD) are SECRET and environment-specific.
 - After bootstrap, the bootstrap password variables can be removed from the environment (the users already exist).
 - No bootstrap execution during S9.
 - No second authentication implementation (Better Auth remains the authority; `auth.api.createUser()` handles password hashing).
 - ADMIN principalType = ADMIN; FANTOMAS principalType = FANTOMAS; capability inheritance unchanged (per AISE §21).
-- If remote DEV/Preview bootstrap is proposed during S10, the contract specifies: environment (DEV or Preview), frequency (once per environment), idempotence (yes), secret storage (Vercel env vars, NOT committed), authorization (OWNER must authorize each environment's bootstrap).
+- If remote DEV/Preview bootstrap is proposed during S10, the contract specifies: environment (DEV or Preview), frequency (once per environment, explicit — not every deployment), idempotence (yes), secret storage (Vercel env vars, NOT committed), authorization (OWNER must authorize each environment's bootstrap).
 
 ### 5.12 Production Boundary
 
@@ -405,27 +523,42 @@ This is an implementation requirement for S10 (the bootstrap script and producti
 
 | Activity | Execution Target | Cost Class | Remote Requests | DB Mutation | Vercel Invocations | Expected Frequency | Retry | Timeout |
 |---|---|---|---|---|---|---|---|---|
-| lint | GitHub Actions runner | LOCAL_UNMETERED | 0 | NO | 0 | Every PR + push to dev/main | 0 | 5 min |
-| typecheck | GitHub Actions runner | LOCAL_UNMETERED | 0 | NO | 0 | Every PR + push to dev/main | 0 | 5 min |
-| Vitest (149) | GitHub Actions runner | LOCAL_UNMETERED + CONTROLLED_TEST (integration) | 0 (local runner) | YES (TEST fixtures) | 0 | Every PR + push to dev/main | 0 | 10 min |
-| build | GitHub Actions runner | LOCAL_UNMETERED | 0 | NO | 0 | Every PR + push to dev/main | 0 | 10 min |
-| Playwright (101) | GitHub Actions runner (spawns local Next.js) | LOCAL_UNMETERED (app) + CONTROLLED_TEST (DB) | 0 (local runner) | YES (TEST fixtures + rateLimit + idempotent bootstrap) | 0 | Push to main + opt-in via label on PR | 0 | 15 min |
-| Preview deployment | Vercel | REMOTE_METERED | 0 (Vercel-internal) | YES (Neon preview branch — migrations + bootstrap) | 1 (Vercel build + deploy) | PR merge to dev | 0 (no retry on deploy failure) | Vercel build timeout (default) |
-| Production deployment | Vercel | REMOTE_QUOTA_LIMITED | 0 (Vercel-internal) | YES (Neon main — migrations + bootstrap — OWNER-authorized) | 1 (Vercel build + deploy) | OWNER PROD GO only | 0 | Vercel build timeout (default) |
+| lint | GitHub Actions runner | LOCAL_UNMETERED | 0 | NO | **0** | PR to dev + push to dev/main | 0 | 5 min |
+| typecheck | GitHub Actions runner | LOCAL_UNMETERED | 0 | NO | **0** | PR to dev + push to dev/main | 0 | 5 min |
+| Vitest (149) | GitHub Actions runner | LOCAL_UNMETERED + CONTROLLED_TEST | 0 (local runner); YES (TEST DB remote requests for integration) | YES (TEST fixtures) | **0** | PR to dev + push to dev/main | 0 | 10 min |
+| build | GitHub Actions runner | LOCAL_UNMETERED | 0 | NO | **0** | PR to dev + push to dev/main | 0 | 10 min |
+| Playwright (101) | GitHub Actions runner (spawns local Next.js) | LOCAL_UNMETERED (app) + CONTROLLED_TEST (DB) | 0 (local app); YES (TEST DB remote requests) | YES (TEST fixtures + rateLimit + idempotent bootstrap) | **0** | Push to dev + opt-in label on PR + workflow_dispatch | 0 | 15 min |
+| wp/* branch push | N/A (no deployment) | N/A | 0 | NO | **0** | Every wp/* push | N/A | N/A |
+| dev Preview deployment | Vercel | REMOTE_METERED | 0 (Vercel-internal) | NO (Vercel build = `pnpm build` only; NO migration; NO bootstrap) | Bounded (1 deployment per eligible push to dev) | Push to dev | 0 (no retry on deploy failure) | Vercel build timeout (default) |
+| main push (pre-S13) | GitHub Actions runner (CI only) | LOCAL_UNMETERED | 0 | NO (CI does not mutate on main push) | **0** (NO Production deployment; Production Branch = placeholder) | Push to main | 0 | 30 min (CI workflow) |
+| Production deployment | Vercel | REMOTE_QUOTA_LIMITED | 0 (Vercel-internal) | YES (Neon main — migration + bootstrap — manual, OWNER-authorized, NOT in Vercel build) | 1 (Vercel build + deploy) | OWNER PROD GO only (S13) | 0 | Vercel build timeout (default) |
 | Remote smoke | NOT IMPLEMENTED in WP-006 | N/A | 0 | NO | 0 | N/A | N/A | N/A |
-| Migration validation | GitHub Actions runner | LOCAL_UNMETERED | 0 | YES (TEST DB migrations) | 0 | Every CI run (Vitest integration tests require current schema) | 0 | Part of Vitest timeout |
+| Migration validation | GitHub Actions runner | LOCAL_UNMETERED + CONTROLLED_TEST | 0 (local runner); YES (TEST DB) | YES (TEST DB migrations) | **0** | Every CI run (Vitest integration tests require current schema) | 0 | Part of Vitest timeout |
 
 ### 5.15 Concurrency / Loop Safety
 
-**Concurrency groups:**
-- CI: `concurrency: group: ci-${{ github.ref }}, cancel-in-progress: true` — cancel superseded runs on the same branch
-- No Vercel concurrency configuration needed (Vercel handles deployment concurrency internally)
+**TWO concurrency levels (frozen):**
 
-**Cancel-in-progress:** YES for CI (avoid duplicate CI executions on rapid pushes to the same branch)
+**A. Non-mutating CI (lint, typecheck, Vitest, build):**
+- `concurrency: group: ci-${{ github.ref }}, cancel-in-progress: true` — cancel superseded runs on the same branch
+- Normal per-branch concurrency; rapid pushes cancel previous runs
+
+**B. Mutating E2E against shared Neon TEST (101 Playwright tests):**
+- `concurrency: group: jourdain-shared-test-e2e, cancel-in-progress: false` — ONE GLOBAL MUTEX across ALL branches and events
+- At most ONE E2E job using shared TEST at a time
+- NO parallel E2E across separate PRs
+- NO parallel PR/dev/main/manual E2E
+- NO two jobs clearing rateLimit simultaneously
+- NO two bootstrap/fixture lifecycles overlapping
+- `cancel-in-progress: false` — a running test is NOT arbitrarily killed mid-mutation (queued jobs wait for the mutex)
+- Timeout: 15 min per E2E job (prevents indefinite lock)
+
+**Cancel-in-progress:** YES for non-mutating CI; NO for mutating E2E (per above)
 
 **Timeouts:**
 - CI workflow: 30 min total
 - CI jobs: 5-15 min per job (see §5.2)
+- E2E job: 15 min (also serves as mutex timeout)
 - Vercel build: Vercel default (no override needed for V1)
 
 **Maximum retry:** 0 (no retries; no flake masking; consistent with WP-005)
@@ -433,14 +566,16 @@ This is an implementation requirement for S10 (the bootstrap script and producti
 **Workflow recursion prevention:** GitHub Actions does not allow workflow recursion by default. No `repository_dispatch` or `workflow_run` triggers that could cause recursion.
 
 **Duplicate deployment prevention:**
-- wp/* branches: NO Vercel Preview (no deployment at all)
-- dev branch: Vercel Preview per merge (one deployment per merge; Vercel handles deduplication)
-- main branch: Production deployment per push (OWNER PROD GO required; no automatic deploy)
+- wp/* branches: NO Vercel Preview (suppressed via Vercel Ignored Build Step — no deployment at all)
+- dev branch: Vercel Preview per eligible push (one deployment per push; Vercel handles deduplication)
+- main branch (pre-S13): NO Production deployment (Production Branch = placeholder; 0 Vercel invocations)
+- main branch (post-S13): Production deployment per push ONLY under OWNER PROD GO
 
 **Duplicate E2E prevention:**
-- CI E2E job runs only on push to main or PR with `run-e2e` label
-- Concurrency group ensures only one E2E run per branch at a time
-- No separate E2E workflow (single `ci.yml` with conditional E2E job)
+- CI E2E job runs only on: push to dev + `run-e2e` label on PR + `workflow_dispatch`
+- Global mutex (`jourdain-shared-test-e2e`) ensures only one E2E run at a time across ALL branches
+- NO duplicate full E2E: the same logical change does NOT trigger 101 E2E twice (push to main does NOT trigger E2E — already verified on dev)
+- No separate E2E workflow (single `ci.yml` with conditional E2E job using global mutex concurrency)
 
 ---
 
@@ -492,25 +627,29 @@ Every future manual OWNER step, with WHEN/WHERE/WHAT/SECRET classification and w
 
 | # | WHEN | WHERE | WHAT | SECRET? | Agent Z needs value? |
 |---|---|---|---|---|---|
-| 1 | S10 start | Vercel dashboard | Create/select Vercel project linked to `alexkanga/jourdain` GitHub repo | NO (project name is non-secret) | YES (project URL for verification) |
-| 2 | S10 start | Vercel dashboard | Set framework preset to Next.js | NO | NO (auto-detected) |
-| 3 | S10 start | Vercel dashboard | Configure build command: `pnpm build` | NO | NO (standard) |
-| 4 | S10 start | Vercel dashboard | Configure install command: `pnpm install --frozen-lockfile` | NO | NO (standard) |
-| 5 | S10 start | Vercel dashboard → Settings → Git | Disable auto-Preview for wp/* branches (or confirm wp/* do NOT trigger Preview) | NO | YES (confirm wp/* Preview is OFF) |
-| 6 | S10 start | Vercel dashboard → Settings → Git | Configure dev branch → Preview deployment | NO | YES (confirm dev Preview is LIMITED) |
-| 7 | S10 start | Vercel dashboard → Settings → Git | Configure main branch → Production deployment (but NOT auto-deploy — OWNER PROD GO required) | NO | YES (confirm main is Production candidate) |
-| 8 | S10 start | Vercel dashboard → Environment Variables (Preview) | Add Preview env vars: DATABASE_URL (Neon preview branch URL), BETTER_AUTH_SECRET (Preview-specific), BETTER_AUTH_URL (Preview origin), INITIAL_ADMIN_PASSWORD (Preview-specific test value), FANTOMAS_INITIAL_PASSWORD (Preview-specific test value), NEXT_PUBLIC_SITE_URL (Preview origin) | YES (secrets) | NO (Agent Z does NOT need secret values; only confirms they are set) |
-| 9 | S10 start | Vercel dashboard → Environment Variables (Production) | Add Production env vars: DATABASE_URL (Neon main branch URL = PROD_DATABASE_URL), BETTER_AUTH_SECRET (Production-specific strong secret), BETTER_AUTH_URL (Production origin), INITIAL_ADMIN_PASSWORD (Production strong secret, rotated after first deploy), FANTOMAS_INITIAL_PASSWORD (Production strong secret, rotated after first deploy), NEXT_PUBLIC_SITE_URL (Production origin) | YES (secrets) | NO (Agent Z does NOT need secret values; only confirms they are set) |
-| 10 | S10 start | Neon dashboard | Confirm Neon project exists with main branch (Production), dev branch (development), test branch (TEST — `ep-gentle-rice-b1vxvfsf`) | NO (branch names are non-secret) | YES (confirm branch URLs/names) |
-| 11 | S10 start | Neon dashboard → Integrations | Connect Neon to Vercel (Neon-Vercel integration auto-provisions preview branches per PR) | NO (integration config is non-secret) | YES (confirm integration is active) |
-| 12 | S10 start | GitHub repo → Settings → Secrets and variables → Actions | Add GitHub Actions secrets: TEST_DATABASE_URL, E2E_EXPECTED_TEST_DATABASE_HOST, BETTER_AUTH_SECRET (TEST-specific), BETTER_AUTH_URL (TEST-specific = `http://127.0.0.1:3100`), INITIAL_ADMIN_PASSWORD (TEST-specific), INITIAL_ADMIN_LOGIN (`admin1`), INITIAL_ADMIN_EMAIL (`admin1@jourdain.local`), FANTOMAS_INITIAL_PASSWORD (TEST-specific), FANTOMAS_EMAIL (`fantomas@jourdain.local`) | YES (secrets) | NO (Agent Z does NOT need secret values; only confirms they are set) |
+| 1 | S10 — **BEFORE linking Git** | Vercel dashboard | **PREFLIGHT**: determine whether the chosen creation/link procedure auto-deploys Production. If YES or UNKNOWN → STOP (`VERCEL_PRODUCTION_AUTO_DEPLOY_NOT_SAFELY_DISABLED`). Do NOT link until safe. | NO | YES (confirm safe procedure) |
+| 2 | S10 start | Vercel dashboard | Create/select Vercel project linked to `alexkanga/jourdain` GitHub repo (ONLY after preflight #1 passes) | NO (project name is non-secret) | YES (project URL for verification) |
+| 3 | S10 start | Vercel dashboard | Set framework preset to Next.js | NO | NO (auto-detected) |
+| 4 | S10 start | Vercel dashboard | Configure build command: `pnpm build` (NO `db:migrate` or `db:bootstrap`) | NO | NO (standard) |
+| 5 | S10 start | Vercel dashboard | Configure install command: `pnpm install --frozen-lockfile` | NO | NO (standard) |
+| 6 | S10 start | Vercel dashboard → Settings → Git | **Set Production Branch = placeholder** (e.g., `production-disabled` or `no-deploy`) — NOT `main` — until S13 OWNER PROD GO | NO | YES (confirm Production Branch is placeholder) |
+| 7 | S10 start | Vercel dashboard → Settings → Git | **Configure Ignored Build Step for wp/\***: skip builds for all `wp/*` branches (Vercel Ignored Build Step or branch ignore list) | NO | YES (confirm wp/* Preview is OFF) |
+| 8 | S10 start | Vercel dashboard → Settings → Git | Configure dev as the ONLY Preview branch (all other non-Production branches excluded) | NO | YES (confirm dev Preview is LIMITED; only dev is eligible) |
+| 9 | S10 start | Vercel dashboard → Environment Variables (Preview) | Add Preview env vars: DATABASE_URL (DEV_DATABASE_URL = Neon dev branch), BETTER_AUTH_SECRET (Preview-specific), BETTER_AUTH_URL (Preview origin, NOT localhost), INITIAL_ADMIN_PASSWORD (Preview-specific test value), FANTOMAS_INITIAL_PASSWORD (Preview-specific test value), NEXT_PUBLIC_SITE_URL (Preview origin) | YES (secrets) | NO (Agent Z does NOT need secret values; only confirms they are set) |
+| 10 | S10 start | Vercel dashboard → Environment Variables (Production) | Add Production env vars: DATABASE_URL (PROD_DATABASE_URL = Neon main branch), BETTER_AUTH_SECRET (Production strong secret), BETTER_AUTH_URL (Production origin), INITIAL_ADMIN_PASSWORD (Production strong secret, rotated after first deploy), FANTOMAS_INITIAL_PASSWORD (Production strong secret, rotated after first deploy), NEXT_PUBLIC_SITE_URL (Production origin). **These are non-operative until S13 OWNER PROD GO.** | YES (secrets) | NO (Agent Z does NOT need secret values; only confirms they are set) |
+| 11 | S10 start | Neon dashboard | Confirm Neon project exists with main branch (Production), dev branch (DEV/Preview), test branch (TEST — `ep-gentle-rice-b1vxvfsf`). **No Neon-Vercel auto-provisioning of per-PR branches** (removed from contract). | NO (branch names are non-secret) | YES (confirm branch URLs/names) |
+| 12 | S10 start | GitHub repo → Settings → Secrets and variables → Actions | Add GitHub Actions **secrets**: TEST_DATABASE_URL, BETTER_AUTH_SECRET (TEST-specific), INITIAL_ADMIN_PASSWORD (TEST-specific), FANTOMAS_INITIAL_PASSWORD (TEST-specific). Add GitHub Actions **variables** (non-secret): E2E_EXPECTED_TEST_DATABASE_HOST, INITIAL_ADMIN_LOGIN (`admin1`), INITIAL_ADMIN_EMAIL (`admin1@jourdain.local`), FANTOMAS_EMAIL (`fantomas@jourdain.local`), BETTER_AUTH_URL (`http://127.0.0.1:3100`). **NO Production secrets in CI.** | YES (secrets); NO (variables) | NO (Agent Z does NOT need secret values; only confirms they are set) |
 | 13 | S10 start | GitHub repo → Settings → Branches | Confirm branch protection: `main` = release (PR + review required); `dev` = development integration (PR + review required) | NO | YES (confirm branch protection rules) |
-| 14 | Post-S10 (S11) | Vercel dashboard → Deployments | Verify a PR merge to dev creates a working Vercel Preview deployment | NO | YES (confirm Preview works) |
-| 15 | Post-S10 (S11) | GitHub Actions | Verify CI runs on PR: lint + typecheck + Vitest + build PASS; E2E on push to main or `run-e2e` label PASS | NO | YES (confirm CI works) |
-| 16 | Future (S13) | Vercel dashboard → Deployments | OWNER PROD GO: trigger Production deployment from `main` branch | NO (authorization is non-secret) | YES (confirm Production deployment) |
-| 17 | Future (S13) | Operator terminal | Run `pnpm db:migrate` with DATABASE_URL=PROD_DATABASE_URL (Production migration — manual, OWNER-authorized) | YES (PROD_DATABASE_URL) | NO (operator runs manually; Agent Z does NOT need Production secret values) |
-| 18 | Future (S13) | Operator terminal | Run `pnpm db:bootstrap` with DATABASE_URL=PROD_DATABASE_URL + Production credential env vars (Production bootstrap — manual, OWNER-authorized, idempotent) | YES (Production secrets) | NO (operator runs manually; Agent Z does NOT need Production secret values) |
-| 19 | Future (S13, optional) | DNS provider + Vercel dashboard | Configure custom domain (if applicable) + DNS records | NO (domain name is non-secret) | YES (confirm domain resolves) |
+| 14 | Post-S10 (S11) | Vercel dashboard → Deployments | Verify push to dev creates a working Vercel Preview deployment; verify push to `wp/*` does NOT create a deployment | NO | YES (confirm Preview works; wp/* suppressed) |
+| 15 | Post-S10 (S11) | GitHub Actions | Verify CI runs on PR + push to dev: lint + typecheck + Vitest + build PASS; E2E on push to dev PASS | NO | YES (confirm CI works) |
+| --- | --- | --- | **S13 OWNER PROD GO actions (NOT S10)** | --- | --- |
+| 16 | Future (S13) | Vercel dashboard → Settings → Git | OWNER PROD GO: change Production Branch from placeholder to `main` | NO (authorization is non-secret) | YES (confirm Production Branch = `main`) |
+| 17 | Future (S13) | Vercel dashboard → Deployments | Trigger Production deployment from `main` (after step 16) | NO | YES (confirm Production deployment) |
+| 18 | Future (S13) | Operator terminal | Run `pnpm db:migrate` with DATABASE_URL=PROD_DATABASE_URL (Production migration — manual, OWNER-authorized) | YES (PROD_DATABASE_URL) | NO (operator runs manually) |
+| 19 | Future (S13) | Operator terminal | Run `pnpm db:bootstrap` with DATABASE_URL=PROD_DATABASE_URL + Production credential env vars (Production bootstrap — manual, OWNER-authorized, idempotent) | YES (Production secrets) | NO (operator runs manually) |
+| 20 | Future (S13, optional) | DNS provider + Vercel dashboard | Configure custom domain (if applicable) + DNS records | NO (domain name is non-secret) | YES (confirm domain resolves) |
+
+**S10 must NOT ask OWNER to: activate main Production deployment, perform Production migration, perform Production bootstrap, deploy Production, or configure Production domain.** S10 only prepares non-operative Production env vars (step 10) and sets the Production Branch to a placeholder (step 6). The Production mapping to `main` is deferred until S13 OWNER PROD GO (step 16).
 
 **Do NOT perform these steps during S9.** S9 is contract design only.
 
@@ -745,6 +884,26 @@ The following numbered acceptance criteria MUST all be met for S11 to PASS:
 | AC-102 | No Production DB mutation without OWNER PROD GO |
 | AC-103 | No Production migration without OWNER PROD GO |
 | AC-104 | No Production bootstrap without OWNER PROD GO |
+
+### Hardened CI & Deployment Safety (S9 Final Patch)
+
+| AC ID | Criterion |
+|---|---|
+| AC-110 | wp/* push does NOT create a Vercel deployment (suppressed via Vercel Ignored Build Step or equivalent) |
+| AC-111 | main push CANNOT create a Production deployment before OWNER PROD GO (Vercel Production Branch = placeholder until S13) |
+| AC-112 | dev is the ONLY eligible automatic Preview branch during MS-006 (Vercel Preview Branches = `[dev]` only) |
+| AC-113 | Preview DB is non-Production (Preview DATABASE_URL = DEV_DATABASE_URL / Neon dev branch, NOT Neon main) |
+| AC-114 | No automatic per-PR Neon DB branch creation exists (removed; dev Preview uses existing Neon dev branch) |
+| AC-115 | Vercel build performs NO DB migration (Vercel build command = `pnpm build` only) |
+| AC-116 | Vercel build performs NO bootstrap (Vercel build command = `pnpm build` only) |
+| AC-117 | Shared TEST E2E is globally serialized (concurrency group `jourdain-shared-test-e2e`, `cancel-in-progress: false`, max 1 parallel) |
+| AC-118 | CI push-to-dev coverage exists (push to dev triggers lint + typecheck + Vitest + build + E2E) |
+| AC-119 | Full E2E does NOT run redundantly on every event (only on push to dev + opt-in label + workflow_dispatch; NOT on every PR or push to main) |
+| AC-120 | All GitHub CI gates can run with ZERO Vercel invocation (CI is independent of Vercel) |
+| AC-121 | GitHub Actions permissions are read-only/minimal (`contents: read` only; no write; no deployment token) |
+| AC-122 | Unauthorized first Production deployment is impossible or causes STOP (first deployment preflight: if creation/link procedure auto-deploys, STOP before linking) |
+| AC-123 | Production mapping to main is deferred until OWNER PROD GO (Vercel Production Branch = placeholder during MS-006) |
+| AC-124 | No Production secret is required by ordinary CI (no PROD_DATABASE_URL or production BETTER_AUTH_SECRET in GitHub Actions) |
 
 ---
 
