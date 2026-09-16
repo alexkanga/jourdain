@@ -1,6 +1,7 @@
 "use client";
 
 import { createAuthClient } from "better-auth/client";
+import { usernameClient } from "better-auth/client/plugins";
 
 /**
  * Minimal Better Auth browser client for WP-003 admin UI.
@@ -19,13 +20,17 @@ import { createAuthClient } from "better-auth/client";
  * - NOT a new authentication system.
  * - NOT public signup, NOT user-management, NOT candidate/recruiter auth.
  * - MUST NOT be used as a security authority.
+ *
+ * The usernameClient plugin matches the server-side username() plugin
+ * configuration (from WP-002). It provides the client-side signIn.username()
+ * method that calls the Better Auth /api/auth/sign-in/username HTTP endpoint,
+ * which properly sets the Set-Cookie header in the browser response.
  */
 
 export const authClient = createAuthClient({
+  plugins: [usernameClient()],
   // baseURL defaults to the current origin in the browser; Better Auth
   // resolves /api/auth/* routes against the same origin.
-  // Explicitly set in case of non-default base URL.
-  baseURL: process.env.NEXT_PUBLIC_BETTER_AUTH_URL,
 });
 
 // Convenience re-exports for admin UI components

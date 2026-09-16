@@ -1,28 +1,64 @@
 "use client";
 
-import { useTransition } from "react";
-import { loginAction, type LoginActionResult } from "./actions";
+import { useState } from "react";
+import { authClient } from "@/lib/auth-client";
 
 /**
  * LoginForm — admin login form (Client Component).
  *
- * Wraps the loginAction Server Action via useTransition so we can display
- * inline error feedback for invalid credentials. Authentication itself is
- * permitted before session; this is a public form (no requireCapability).
+ * Uses the Better Auth client-side API (authClient.signIn.username) to
+ * authenticate. The client-side method calls the Better Auth HTTP endpoint
+ * (/api/auth/sign-in/username) which properly sets the Set-Cookie header
+ * in the browser response. This is the canonical Better Auth + Next.js
+ * pattern.
+ *
+ * Authentication itself is permitted before the user has an authenticated
+ * session. No circular rule requiring authenticated capability before
+ * sign-in. This is a PUBLIC action (no requireCapability).
+ *
+ * Only AFTER successful authentication may an authorized JOURDAIN
+ * administrative principal (ADMIN or FANTOMAS) enter the protected admin
+ * area. The admin layout guard (getPrincipal) enforces this server-side.
+ *
+ * On invalid credentials: displays "Identifiants invalides" — no
+ * information leak about which field was wrong (per FR-001 acceptance).
  */
 
 export function LoginForm() {
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<LoginActionResult["ok"] extends true ? never : string | null>(null);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setPending(true);
     setError(null);
-    const fd = new FormData(e.currentTarget);
-    startTransition(async () => {
-      const r = await loginAction(fd);
-      if (!r.ok) setError(r.error);
-    });
+
+    const formData = new FormData(e.currentTarget);
+    const username = String(formData.get("username") ?? "");
+    const password = String(formData.get("password") ?? "");
+
+
+    try {
+      const result = await authClient.signIn.username({
+        username,
+        password,
+      });
+
+
+      if (result.error) {
+        setError("Identifiants invalides");
+        setPending(false);
+        return;
+      }
+
+      // Login succeeded — Better Auth has set the session cookie via
+      // Set-Cookie header. Navigate to the protected admin area.
+      // Use full page navigation to ensure the server reads the new cookie.
+      window.location.href = "/admin/offres";
+    } catch {
+      setError("Identifiants invalides");
+      setPending(false);
+    }
   }
 
   return (
@@ -92,6 +128,3 @@ export function LoginForm() {
     </div>
   );
 }
-
-// Local useState import (kept at bottom to avoid top-of-file clutter)
-import { useState } from "react";
