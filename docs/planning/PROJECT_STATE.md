@@ -8,8 +8,8 @@ control plane) to understand where the project stands.
 ## Current phase
 
 PROJECT:                JOURDAIN EMPLOI
-AISE PHASE:             WP-003 / MS-003 CLOSURE (owner-accepted S11 PASS WITH NON-BLOCKING FINDINGS)
-STATUS:                 MS-003 CLOSED PASS WITH NON-BLOCKING FINDINGS — WP-003 CLOSED — ready for AISE Universal Patch (Hobby-Safe / Quota-Safe), then WP-004 preparation
+AISE PHASE:             AISE QUOTA-SAFETY PATCH ACTIVE — ready for S9 WP-004 preparation
+STATUS:                 AISE Universal Patch (Remote Runtime Cost / Quota Safety) ACCEPTED + MERGED. S0 v0.2 active. Ready for WP-004 (Public Job Portal, MS-004) preparation — NOT YET AUTHORIZED
 CANONICAL RELEASE BRANCH: main
 CANONICAL DEVELOPMENT BRANCH: dev
 ACTIVE DEVELOPMENT BRANCH: dev
@@ -67,7 +67,35 @@ REMOTE:                 configured (origin → git@github.com-aise-alexkanga-jou
 REMOTE HEAD:            35f80b38ddba9e68ef1ae417ade869f9e424c659 (dev)
 LOCAL = REMOTE:         YES (dev)
 MAIN HEAD:              0bc77a783c8efc1ba6056c67b5a5e290dd26ee4d (unchanged since branch cutover)
-AISE SOURCE COMMIT:     2991df51c1fa692f892452c361081c626f028cd0
+AISE S0 VERSION:               0.2
+AISE QUOTA-SAFETY PATCH:        ACCEPTED / MERGED
+AISE QUOTA-SAFETY PATCH COMMIT: f3f2bdcc233fe28cca01b18090aca0ee96561f61
+AISE QUOTA-SAFETY PATCH DATE:   2026-09-16
+AISE QUOTA-SAFETY POLICY STATUS: ACTIVE
+AISE QUOTA-SAFETY DOCTRINE:     S0 §26 FROZEN REMOTE RUNTIME COST & QUOTA SAFETY
+  - Local-first automated verification
+  - Dedicated TEST resources (DEV ≠ TEST when TEST exists)
+  - Remote is not free by default (FREE ≠ UNMETERED)
+  - Metered/quota-limited resources require control
+  - Production is not a development test target
+  - UNKNOWN → INVESTIGATE (never UNKNOWN → RUN ANYWAY)
+  - No silent target substitution
+  - Evidence must identify target
+  - Automated remote E2E is opt-in (default: localhost)
+  - Mutation accounting (mutation = mutation, even test-state)
+  - Preview deployment policy (work branches: no auto-preview)
+  - Human preview ≠ automated test target
+  - Retry/loop safety
+
+JOURDAIN INTENDED QUOTA-SAFETY EXECUTION POLICY (project-specific overlay):
+  UNIT TESTS:              LOCAL
+  INTEGRATION TESTS:       TEST_DATABASE_URL
+  FULL E2E:                localhost application by default
+  REMOTE VERCEL E2E:       NOT AUTHORIZED BY DEFAULT
+  WORK-BRANCH CLOUD PREVIEW: DISABLED BY DEFAULT
+  DEV/INTEGRATION PREVIEW: may later be enabled for limited human validation
+  MAIN/PRODUCTION:         explicit release authorization only
+  NOTE: Vercel NOT configured now. MS-006 remains the deployment milestone.
 COMPLETED COMPONENTS:   S0, S1, S2, S3, S4, S5, S6, S7, S8, S9 (WP-001), S10 (WP-001), S11 (WP-001), S9 (WP-002), S10 (WP-002), S11 (WP-002), S9 (WP-003), S10 (WP-003), S11 (WP-003) installed and canonical
 PRODUCT DISCOVERY:      CLOSED PASS — CHARTER APPROVED (S4)
 PRODUCT REQUIREMENTS:   CLOSED PASS — PRODUCT REQUIREMENTS APPROVED (S5)
