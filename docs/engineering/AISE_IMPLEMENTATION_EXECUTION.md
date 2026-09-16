@@ -1080,3 +1080,30 @@ When the required capability is configured:
    materially changed or evidence became invalid.
 
 CONFIGURATION RECOVERY → RESUME, not RESTART.
+
+---
+
+## 67. REMOTE RUNTIME COST & QUOTA SAFETY (per S0 §26)
+
+Before running tests that touch external infrastructure, S10 must know:
+
+- **ACTUAL TARGET** — which environment the test will hit.
+- **ENVIRONMENT CLASS** — LOCAL, TEST, DEV, PREVIEW, or PRODUCTION
+  (per S0 §26 environment classification).
+- **COST/QUOTA CLASS** — LOCAL_UNMETERED, CONTROLLED_TEST,
+  REMOTE_METERED, REMOTE_QUOTA_LIMITED, or UNKNOWN.
+
+S10 must NOT silently redirect tests to a remote runtime. A test
+authorized for LOCAL or TEST must not execute against DEV, PREVIEW,
+or PRODUCTION.
+
+For destructive test operations (cleanup, truncation, reset, bootstrap,
+rate-limit clearing, fixture insertion), the target environment must be
+positively verified BEFORE execution (S0 §26: TEST DATA ISOLATION).
+
+S10 must not generate uncontrolled retry traffic against
+REMOTE_METERED or REMOTE_QUOTA_LIMITED resources (S0 §26: RETRY/LOOP
+SAFETY).
+
+Application implementation remains governed by the authorized WP.
+This section governs test/verification execution behavior only.

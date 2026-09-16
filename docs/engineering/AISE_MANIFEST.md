@@ -6,6 +6,11 @@ SOURCE COMMIT:         2991df51c1fa692f892452c361081c626f028cd0
 INSTALLED COMPONENTS:  S0, S1, S2, S3, S4, S5, S6, S7, S8, S9, S10, S11, S12, S13, S14, R1, R2, R3, R4, R5, R6, R7
 INSTALLATION DATE:     2026-09-07
 PROJECT AISE STATUS:   ACTIVE
+S0 VERSION:            0.2 (patched: added §26 REMOTE RUNTIME COST & QUOTA SAFETY)
+S0 PATCH DATE:         2026-09-16
+S0 PATCH SCOPE:        Added §26 to S0; added §38 to S6; added §67 to S10;
+                      added §57 to S11; added §65 to S12. No application
+                      code modified. Provider-neutral governance patch.
 
 This manifest records the provenance of the AISE governance material
 installed in this repository. It exists so that any future agent or

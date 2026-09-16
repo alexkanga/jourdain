@@ -878,3 +878,34 @@ constraints, select it and record the rationale.
 S6 must NOT create architecture for hypothetical future requirements.
 "We might need to scale to millions of users" is not a requirement
 unless the OWNER approves it as one.
+
+---
+
+## 38. REMOTE RUNTIME COST & QUOTA SAFETY (per S0 §26)
+
+The technical specification MUST identify:
+
+- **Environment classes** used by the project (LOCAL, TEST, DEV,
+  PREVIEW, PRODUCTION) per S0 §26 environment classification.
+- **External services** the project depends on and their cost/quota
+  class (LOCAL_UNMETERED, CONTROLLED_TEST, REMOTE_METERED,
+  REMOTE_QUOTA_LIMITED, UNKNOWN).
+- **Test resources** — dedicated TEST resources, their identity, and
+  how they are positively verified before use.
+- **Cost/quota-sensitive services** — any remote service with metered
+  billing or quota limits. The specification must state the known quota
+  class and whether automated test traffic is authorized.
+- **E2E execution target** — default localhost; any remote E2E target
+  requires explicit authorization (S0 §26: AUTOMATED REMOTE E2E IS
+  OPT-IN).
+- **Destructive-test target** — which environment receives test data
+  mutations (cleanup, truncation, reset, bootstrap, rate-limit
+  clearing, fixture insertion). Must be positively verified before
+  execution (S0 §26: TEST DATA ISOLATION).
+- **Production isolation** — how production is protected from
+  development/test traffic.
+- **Remote-test authorization policy** — whether remote automated
+  testing is authorized, for which targets, and under what conditions.
+
+This section is concise. It cross-references S0 §26 rather than
+duplicating the full doctrine.

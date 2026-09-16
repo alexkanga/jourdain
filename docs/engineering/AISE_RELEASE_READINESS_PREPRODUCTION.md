@@ -1061,3 +1061,26 @@ S12 must NOT assume responsibilities of other stages.
 ---
 
 **PORTABLE RUNTIME NOTE:** One-time instructions used to construct/canonicalize this AISE protocol have been intentionally omitted from the portable distribution. The operational protocol above is authoritative for project use.
+
+---
+
+## 65. REMOTE RUNTIME COST & QUOTA SAFETY (per S0 §26)
+
+Before release/deployment readiness, S12 must verify:
+
+- **Deployment target classification** — the target environment class
+  (PREVIEW/STAGING or PRODUCTION) and its cost/quota class.
+- **Production isolation** — production is protected from
+  development/test traffic.
+- **Automated remote test policy** — whether automated tests will run
+  against the deployed target, and if so, whether this is explicitly
+  authorized (S0 §26: AUTOMATED REMOTE E2E IS OPT-IN).
+- **Preview deployment policy** — whether work-branch automatic
+  previews are enabled; if so, whether they are quota-safe.
+- **Quota/cost controls** — no uncontrolled continuous test traffic
+  against the deployed target (S0 §26: RETRY/LOOP SAFETY).
+- **No accidental continuous test traffic** — deployment success and
+  E2E validation are separate concepts (S0 §26: CI/CD SAFETY).
+
+S12 remains GLOBAL release readiness. This section does NOT redefine
+S12 as WP closure.

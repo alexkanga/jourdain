@@ -1,10 +1,10 @@
 AI SOFTWARE ENGINEERING OS
 ======================================================================
 
-Version: 0.1
+Version: 0.2
 Status: CLOSED / PASS / CANONICAL
 Distribution: UNIVERSAL PORTABLE
-Frozen Rules: §24 CONTRACT PRESERVATION · §25 EXTERNAL PARAMETER GATE
+Frozen Rules: §24 CONTRACT PRESERVATION · §25 EXTERNAL PARAMETER GATE · §26 REMOTE RUNTIME COST & QUOTA SAFETY
 
 Operational implementation:
   S1 — AISE Universal Launcher → docs/engineering/AISE_UNIVERSAL_LAUNCHER.md
@@ -1345,6 +1345,135 @@ GIT / RESOURCE MAPPING CLARIFICATION:
     Git branch dev  ≠ Neon branch dev
 
   Association is a policy decision, not an identity equivalence.
+
+======================================================================
+26. FROZEN REMOTE RUNTIME COST & QUOTA SAFETY
+======================================================================
+
+FROZEN — OWNER-approved universal invariant.
+
+This section establishes universal AISE governance for remote runtime
+cost safety, quota safety, and test target safety. It is
+provider-neutral and applies equally to all cloud/remote services.
+
+A. LOCAL-FIRST TESTING
+
+Automated development verification should use local execution whenever
+local execution can provide equivalent evidence.
+
+B. DEDICATED TEST RESOURCES
+
+Integration and verification data must use resources explicitly
+classified as TEST whenever available. DEV is not a substitute for
+TEST when a dedicated TEST environment exists.
+
+C. REMOTE IS NOT FREE BY DEFAULT
+
+A remote runtime must never be assumed to be harmless merely because
+the provider labels the plan Free, Hobby, Trial, Preview, Developer,
+Sandbox, or similar.
+
+D. METERED / QUOTA-LIMITED RESOURCES REQUIRE CONTROL
+
+Repeated automated traffic against a metered or quota-limited remote
+runtime requires explicit authorization.
+
+E. PRODUCTION IS NOT A TEST TARGET
+
+Production must never be used as a development integration, E2E,
+load, stress, soak, or synthetic-monitoring target without explicit
+exceptional authorization.
+
+F. UNKNOWN -> INVESTIGATE
+
+If cost class, quota class, runtime target, environment identity, or
+billing impact is UNKNOWN: UNKNOWN -> INVESTIGATE. Never:
+UNKNOWN -> RUN ANYWAY.
+
+G. NO SILENT TARGET SUBSTITUTION
+
+A test authorized for LOCAL or TEST must not silently execute against
+DEV, PREVIEW, STAGING, PRODUCTION, or another cloud target.
+
+H. EVIDENCE MUST IDENTIFY TARGET
+
+Verification reports must state the actual runtime/environment used.
+
+ENVIRONMENT CLASSIFICATION (universal):
+
+  LOCAL              — local machine, no remote network calls
+  TEST               — dedicated test resource, explicitly classified
+  DEV / INTEGRATION  — development integration resource
+  PREVIEW / STAGING   — pre-release cloud deployment
+  PRODUCTION          — live production resource
+
+COST / QUOTA CLASSIFICATION (universal):
+
+  LOCAL_UNMETERED        — no metered cost, no quota
+  CONTROLLED_TEST         — dedicated test resource with known limits
+  REMOTE_METERED          — usage-based billing
+  REMOTE_QUOTA_LIMITED    — free-tier or quota-capped remote resource
+  UNKNOWN                 — cost/quota class not determined
+
+Do not assume PREVIEW = TEST.
+Do not assume FREE = UNMETERED.
+Do not assume LOCAL APP = LOCAL DATA.
+
+DEFAULT AUTHORIZATION MATRIX:
+
+  UNIT TESTS:           default LOCAL; remote normally unnecessary
+  INTEGRATION TESTS:    default dedicated TEST resource; DEV not a
+                       substitute for TEST; PRODUCTION forbidden
+  BROWSER / E2E:        default localhost; data on dedicated TEST;
+                       remote PREVIEW requires explicit authorization;
+                       PRODUCTION forbidden
+  LOAD / STRESS / SOAK: LOCAL or explicitly provisioned load-test
+                       environment only; quota-limited remote forbidden
+  SYNTHETIC MONITORING: must be explicitly designed and authorized;
+                       must not arise accidentally
+
+AUTOMATED REMOTE E2E IS OPT-IN:
+
+  A browser/E2E suite must not automatically point to a remote URL
+  merely because a Preview URL exists, a deployment succeeded, or an
+  environment variable contains a cloud URL. Default: localhost. A
+  remote E2E target requires explicit authorization stating: TARGET,
+  ENVIRONMENT CLASS, COST/QUOTA CLASS, PURPOSE, EXPECTED REQUEST VOLUME.
+
+TEST DATA ISOLATION:
+
+  Verification must distinguish APP RUNTIME TARGET from DATABASE /
+  STATE TARGET. For destructive test operations (cleanup, truncation,
+  reset, bootstrap, rate-limit clearing, fixture insertion), the target
+  environment must be positively verified BEFORE execution.
+
+MUTATION ACCOUNTING:
+
+  If a verification clears, resets, inserts, updates, deletes, or
+  otherwise changes a resource, that environment was MUTATED. Reports
+  must distinguish: APPLICATION DATA MUTATION, TEST SUPPORT DATA
+  MUTATION, SCHEMA MUTATION, GOVERNANCE MUTATION.
+
+PREVIEW DEPLOYMENT POLICY:
+
+  For quota-limited platforms, automatic deployment of every temporary
+  work branch is NOT the universal default. Work branches: no automatic
+  cloud Preview unless project explicitly requires it. Integration/dev
+  branches: Preview may be enabled for controlled human validation.
+  Release/production branches: deployment per explicit release policy.
+
+HUMAN PREVIEW VS AUTOMATED TEST:
+
+  A Preview deployment may be useful for occasional human validation
+  while still being prohibited as an automated high-frequency test
+  target.
+
+RETRY / LOOP SAFETY:
+
+  Automated retry loops must not generate uncontrolled traffic against
+  REMOTE_METERED or REMOTE_QUOTA_LIMITED resources. Before repeated
+  remote execution, inspect: retry count, parallelism, browser workers,
+  polling frequency, scheduled checks, synthetic probes.
 
 ======================================================================
 END AI SOFTWARE ENGINEERING OS 0.1

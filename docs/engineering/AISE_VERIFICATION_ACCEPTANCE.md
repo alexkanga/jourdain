@@ -829,3 +829,31 @@ S11 is:
 independently reproducible where practical
 independently reproducible where practical
 - independently reproducible where practical
+
+---
+
+## 57. REMOTE RUNTIME COST & QUOTA SAFETY EVIDENCE (per S0 §26)
+
+S11 verification reports must explicitly state (where relevant to the
+verification):
+
+- **APPLICATION RUNTIME TARGET** — where the app ran (localhost, cloud,
+  etc.)
+- **DATABASE / STATE TARGET** — which database/state resource was used.
+- **REMOTE CLOUD TARGET USED** — yes/no; if yes, which target and
+  whether explicitly authorized.
+- **REMOTE E2E** — yes/no (automated remote E2E is opt-in per S0 §26).
+- **LOAD TEST** — yes/no.
+- **POLLING** — yes/no (synthetic monitoring/polling).
+- **PRODUCTION TOUCHED** — yes/no.
+- **DEV MUTATED** — yes/no (any mutation to DEV resources, including
+  rate-limit clearing, bootstrap, fixture insertion).
+- **TEST MUTATED** — yes/no (test support data mutations on TEST
+  resources — expected for integration tests; must be stated honestly).
+
+Only require fields relevant to the verification. Do not create
+bureaucratic noise for purely local/unit work.
+
+A verification that clears DEV rateLimit must report DEV MUTATED: YES,
+even if the mutation is operational/test-state only (S0 §26: MUTATION
+ACCOUNTING).
