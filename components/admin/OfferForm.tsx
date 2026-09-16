@@ -6,7 +6,7 @@ import { TiptapEditor } from "./TiptapEditor";
 import {
   createOfferAction,
   updateOfferAction,
-} from "@/app/admin/offres/actions";
+} from "@/app/admin/(protected)/offres/actions";
 
 /**
  * OfferForm — admin create/edit form for an offer.

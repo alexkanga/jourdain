@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { neon } from "@neondatabase/serverless";
 import { readFileSync } from "node:fs";
 

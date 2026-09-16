@@ -71,31 +71,36 @@ export default async function AdminOffersPage({
 
       {/* Filters */}
       <div className="mb-4 flex flex-wrap items-end gap-3">
-        <div>
+        <form action="/admin/offres" method="GET" className="flex flex-col">
           <label className="mb-1 block text-xs font-medium text-gray-600">
             Statut
           </label>
-          <select
-            key={`status-${status ?? ""}`}
-            defaultValue={status ?? ""}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            onChange={(e) => {
-              const val = e.target.value;
-              const url = new URL(window.location.href);
-              if (val) url.searchParams.set("status", val);
-              else url.searchParams.delete("status");
-              window.location.href = url.toString();
-            }}
-          >
-            <option value="">Tous</option>
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {STATUS_LABELS[s]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <form className="flex-1 min-w-[200px]" action="" method="GET" role="search">
+          <div className="flex gap-2">
+            <select
+              key={`status-${status ?? ""}`}
+              defaultValue={status ?? ""}
+              name="status"
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">Tous</option>
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABELS[s]}
+                </option>
+              ))}
+            </select>
+            {q && (
+              <input type="hidden" name="q" value={q} />
+            )}
+            <button
+              type="submit"
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Filtrer
+            </button>
+          </div>
+        </form>
+        <form className="flex-1 min-w-[200px]" action="/admin/offres" method="GET" role="search">
           <label className="mb-1 block text-xs font-medium text-gray-600">
             Recherche par titre
           </label>
