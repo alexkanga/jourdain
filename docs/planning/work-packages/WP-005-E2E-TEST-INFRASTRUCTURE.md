@@ -7,8 +7,10 @@
 | WP ID | WP-005 |
 | Name | E2E Test Infrastructure |
 | Source Milestone | MS-005 — E2E Integration + Hardening (DELIVERY_ROADMAP §7) |
-| Status | DRAFT — PENDING OWNER APPROVAL + AUTHORIZATION |
+| Status | DRAFT (PATCHED) — PENDING OWNER APPROVAL + AUTHORIZATION |
 | Canonical dev SHA (at S9 start) | `484898e5b513d1313f458880a6fc6b32175aa990` |
+| Canonical dev SHA (after initial S9 contract) | `6278315929868210ed9ac96a80748e6f471b0c25` |
+| S9 patch operations | 1 (this patch — harden E2E target verification contract) |
 | Canonical main SHA (at S9 start) | `0bc77a783c8efc1ba6056c67b5a5e290dd26ee4d` |
 | Source Charter (S4) | `docs/planning/PROJECT_CHARTER.md` at `fa377c1` |
 | Source Product Requirements (S5) | `docs/product/PRODUCT_REQUIREMENTS.md` at `9ec4a08` |
@@ -151,19 +153,24 @@ This contract eliminates the environment-target ambiguity discovered during WP-0
 |---|---|---|
 | Application runtime | LOCAL (Next.js on `127.0.0.1`) | Spawned by the E2E runner |
 | Application base URL | `http://127.0.0.1:<PORT>` or `http://localhost:<PORT>` | Loopback only |
-| Database / state target | TEST (TEST_DATABASE_URL) | Positively verified before execution |
+| Database / state target | TEST (TEST_DATABASE_URL) | Positively verified before any mutation (see §5.5 Phase A) |
 | Remote application target | NO by default | Refused without explicit override (see §5.6) |
 | Production database | NEVER by default | Refused unconditionally |
 | DEV database | NOT an acceptable substitute for TEST | Refused for E2E |
 | SQLite fallback (`file:...`) | Refused | Refused for E2E |
 
-**Environment precedence rules (deterministic, explicit):**
+**Environment precedence rules (deterministic, explicit — see also §16 Mutation Ordering Invariant):**
 
 1. The E2E runner explicitly reads `TEST_DATABASE_URL` from `.env.local` (using the same `parseEnvLocal()` pattern already established by the integration tests).
-2. The runner positively verifies the TEST database identity (see §5.5) BEFORE spawning the Next.js process.
-3. The runner injects `DATABASE_URL=$TEST_DATABASE_URL` into the spawned Next.js process environment, **overriding any parent `DATABASE_URL` value** (this is the canonical fix for the WP-004 environment incident).
-4. The runner does NOT trust a parent `DATABASE_URL` even if it appears to point to TEST — it MUST use the explicit `TEST_DATABASE_URL` value as the source of truth.
-5. A parent `.env` `DATABASE_URL=file:...` SQLite fallback MUST NOT silently redirect the E2E suite — the runner ignores it and uses `TEST_DATABASE_URL` directly.
+2. The runner positively verifies the TEST database identity (see §5.5 Phase A) BEFORE any mutation (fixture insert, fixture cleanup, rateLimit cleanup, bootstrap, test user creation, offer creation).
+3. The runner constructs the child Next.js process environment EXPLICITLY from scratch — it does NOT inherit the parent process environment wholesale.
+4. The runner REMOVES or OVERRIDES any inherited parent `DATABASE_URL` from the child environment before spawning. Specifically:
+   a. The child environment is built from a curated allowlist of required variables (TEST_DATABASE_URL, BETTER_AUTH_SECRET, BETTER_AUTH_URL, INITIAL_ADMIN_LOGIN, INITIAL_ADMIN_PASSWORD, FANTOMAS_INITIAL_PASSWORD, FANTOMAS_EMAIL, INITIAL_ADMIN_EMAIL, plus the explicit `DATABASE_URL` injection).
+   b. Any inherited `DATABASE_URL` (including a parent `.env` `DATABASE_URL=file:...` SQLite fallback) is NEUTRALIZED — it is NOT present in the child environment unless explicitly re-injected by the runner as `DATABASE_URL=$TEST_DATABASE_URL`.
+   c. The runner injects `DATABASE_URL=$TEST_DATABASE_URL` (the positively verified TEST value) into the child environment. This is the canonical fix for the WP-004 environment incident.
+5. The runner does NOT trust a parent `DATABASE_URL` even if it appears to point to TEST — it MUST use the explicit `TEST_DATABASE_URL` value as the source of truth.
+6. A parent `.env` `DATABASE_URL=file:...` SQLite fallback MUST NOT silently redirect the E2E suite — the runner ignores it and uses `TEST_DATABASE_URL` directly.
+7. **Frozen rule (parent DATABASE_URL contamination)**: the child application process MUST NOT trust inherited `DATABASE_URL`. Before spawn, the runner removes or overrides inherited `DATABASE_URL`. Then explicitly injects `DATABASE_URL = positively verified TEST_DATABASE_URL`. Guard self-test AC-037 simulates `parent DATABASE_URL=file:...` and verifies: (A) the parent value is NOT used; (B) the application receives TEST; (C) NO mutation occurs before target certification.
 
 ### 5.4 Local Base URL Policy
 
@@ -174,27 +181,58 @@ This contract eliminates the environment-target ambiguity discovered during WP-0
 
 ### 5.5 Database Target Identity Verification
 
-The runner positively identifies the database target before any execution. Verification mechanism (deterministic, no string folklore):
+The runner positively identifies the database target BEFORE ANY MUTATION (per §16 Mutation Ordering Invariant). The verification is split into TWO phases — a read-only Phase A performed before any mutation, and an optional post-spawn Phase B that uses a SAFE sentinel approach (NOT a write-through-application probe).
+
+#### Phase A — BEFORE ANY APPLICATION OR TEST MUTATION (read-only)
 
 1. **Source of truth**: read `TEST_DATABASE_URL` from `.env.local` via the canonical `parseEnvLocal()` helper (already used by `__tests__/auth-regression.test.ts`, `__tests__/offers-integration.test.ts`, `__tests__/public-offers-integration.test.ts`).
-2. **Reachability probe**: open a Neon HTTP connection using `@neondatabase/serverless` `neon()` and execute `SELECT 1 AS one`. Fail-closed if not reachable.
-3. **Identity assertion**: query `SELECT current_database() AS db, current_setting('server_version') AS version`. Record the actual database name returned.
-4. **Host comparison**: parse the URL hostname of `TEST_DATABASE_URL`; this is the canonical TEST host reference. The runner records this host string in the E2E report (NOT as a hardcoded literal in committed code — the value comes from `.env.local`).
-5. **Refuse-non-TEST guard**: the runner also reads `DATABASE_URL` (parent env if present), `DEV_DATABASE_URL`, and `PROD_DATABASE_URL` (if any). If any of these resolves to a different host than the TEST host, the runner logs the divergence and proceeds ONLY with the explicit `TEST_DATABASE_URL` injection — it does NOT refuse the run, but it documents the divergence in the report. If the parent `DATABASE_URL` host matches a DEV or PROD host (or resolves to a SQLite `file:` URL), the runner emits a clear warning but still proceeds with TEST injection. (The refuse-non-TEST semantics apply at the application-process level — the spawned Next.js process receives ONLY `DATABASE_URL=TEST_DATABASE_URL`, never the parent value.)
-6. **Live target verification post-spawn**: after spawning Next.js, the runner issues a test SQL via the application's API or a fixture helper that confirms the database the application process actually sees IS the TEST database (e.g., insert a probe fixture via the running app's Server Action, then verify via direct Neon SQL on `TEST_DATABASE_URL` that the probe row landed in the TEST database). This is the canonical positive-identification step that closes the WP-004 incident class.
+2. **URL type/scheme validation**: validate `TEST_DATABASE_URL` matches the URL type/scheme expected by the current project architecture. Per ADR-0002 + ADR-0006 + S6 TD-019, the canonical database architecture is `Drizzle + neon-http` over a `postgresql://` URL with `sslmode=require`. Reject URLs that are not `postgresql://` (including `file:`, `postgres://` without SSL, `mysql://`, etc.).
+3. **Positive TEST fingerprint comparison**: the runner reads `E2E_EXPECTED_TEST_DATABASE_HOST` from `.env.local` (or `.env.example` as fallback). This is a project-local, NON-SECRET expected TEST hostname (e.g., `ep-gentle-rice-b1vxvfsf.c-5.eu-central-1.aws.neon.tech`). The runner parses the URL hostname of `TEST_DATABASE_URL` and compares it to the expected fingerprint. If they do not match → **STOP** with `TEST_FINGERPRINT_MISMATCH` error. This is the project-specific enforcement of AISE S0 v0.2 §26 — it proves positively that this is the expected TEST target, not merely that it differs from DEV/PROD. (The expected hostname itself is non-secret — it identifies a database resource, not credentials. Do NOT commit database credentials.)
+4. **Read-only connectivity/identity probe**: open a Neon HTTP connection using `@neondatabase/serverless` `neon()` and execute ONLY read-only SQL:
+   - `SELECT 1 AS one` (reachability)
+   - `SELECT current_database() AS db, current_setting('server_version') AS version` (identity assertion — records actual database name)
+   These queries do NOT mutate state. Fail-closed if not reachable.
+5. **Refuse-non-TEST guard (necessary but not sufficient for positive identity)**: the runner also reads `DATABASE_URL` (parent env if present), `DEV_DATABASE_URL`, and `PROD_DATABASE_URL` (if any). If any of these resolves to a different host than the verified TEST host, the runner logs the divergence and proceeds ONLY with the explicit `TEST_DATABASE_URL` injection. If the parent `DATABASE_URL` host matches the verified TEST host, that is acceptable (the runner still injects TEST_DATABASE_URL explicitly). If the parent `DATABASE_URL` host matches a DEV or PROD host (or resolves to a SQLite `file:` URL), the runner emits a clear warning but still proceeds with TEST injection. (The refuse-non-TEST semantics apply at the application-process level — the spawned Next.js process receives ONLY `DATABASE_URL=TEST_DATABASE_URL`, never the parent value.)
+6. **Construct the child Next.js process environment explicitly**: per §5.3 rule 3-4. The child env is built from a curated allowlist; any inherited `DATABASE_URL` is removed/overridden; `DATABASE_URL=$TEST_DATABASE_URL` is injected explicitly.
 
-**Unknown target behavior:**
+Only after Phase A passes may the following mutate TEST:
+- fixtures (insert, cleanup)
+- bootstrap
+- rate-limit cleanup
+- test user creation
+- offer creation
+- browser actions
+
+#### Phase B — Optional SAFE post-spawn target confirmation (read-only via public read path)
+
+If additional post-spawn confirmation is desired, the runner uses a SAFE pattern that NEVER writes through an application whose DB target has not already been certified in Phase A:
+
+1. **After TEST has already been certified in Phase A**, seed a uniquely identifiable PUBLISHED sentinel DIRECTLY into TEST via the runner's TEST-verified Neon SQL connection (NOT through the application). The sentinel uses an `E2E_<run-id>_<scenario>` title marker (per §5.9 Fixture Marker Policy — the marker lives in the `title` business field, NOT in a new schema column and NOT replacing the canonical UUID `id`).
+2. **Start the application** with the explicitly constructed TEST environment (from Phase A step 6).
+3. **Through the public read path** (`GET /`), verify the application can see that unique sentinel by fetching the root URL and asserting the sentinel title appears in the PUBLISHED offer list.
+   - This proves the application is reading the expected TEST state — if the application's DB ≠ TEST, the sentinel would not be visible (because the sentinel only exists in TEST).
+4. If the sentinel is NOT visible within the readiness timeout → **STOP** with `APP_DB_DIVERGENCE` error.
+5. **Cleanup sentinel from TEST only** (via the runner's TEST-verified Neon SQL connection, by the exact recorded canonical UUID of the sentinel offer).
+
+**This pattern NEVER writes through an application whose DB target has not already been certified.** The sentinel insert happens via direct Neon SQL on the positively-verified TEST connection — it does NOT go through the application Server Action, so it cannot accidentally mutate DEV/PROD even if the application were somehow misconfigured.
+
+#### Unknown target behavior
 
 - If `TEST_DATABASE_URL` is missing → **STOP** with `MISSING_TEST_DATABASE_URL` error.
+- If `TEST_DATABASE_URL` URL scheme is not `postgresql://` (e.g., `file:`, `mysql:`, etc.) → **STOP** with `TEST_IS_SQLITE_FALLBACK` (for `file:`) or `TEST_UNSUPPORTED_SCHEME` (for other non-postgresql schemes).
+- If `TEST_DATABASE_URL` host does NOT match `E2E_EXPECTED_TEST_DATABASE_HOST` → **STOP** with `TEST_FINGERPRINT_MISMATCH` error.
 - If `TEST_DATABASE_URL` is set but unreachable → **STOP** with `TEST_DB_UNREACHABLE` error.
 - If `TEST_DATABASE_URL` host matches the DEV host → **STOP** with `TEST_EQUALS_DEV` error.
 - If `TEST_DATABASE_URL` host matches the PROD host → **STOP** with `TEST_EQUALS_PROD` error.
-- If `TEST_DATABASE_URL` URL scheme is `file:` (SQLite fallback) → **STOP** with `TEST_IS_SQLITE_FALLBACK` error.
-- If the post-spawn live verification fails (app's DB ≠ TEST DB) → **STOP** with `APP_DB_DIVERGENCE` error.
+- If the post-spawn Phase B sentinel is not visible → **STOP** with `APP_DB_DIVERGENCE` error.
 
 **Rule (AISE S0 v0.2 §26):**
 > UNKNOWN TARGET → STOP / INVESTIGATE
 > NEVER: UNKNOWN TARGET → RUN ANYWAY
+
+**Rule (WP-005 Mutation Ordering Invariant — see §16):**
+> NO STATE MUTATION BEFORE TARGET CERTIFICATION.
+> The previous proposal to "insert a probe fixture via the running app's Server Action, then verify via direct Neon SQL that the row landed in TEST" is REMOVED — that approach would have mutated an uncertified target before detecting divergence, violating FAIL CLOSED and VERIFY TARGET BEFORE MUTATION.
 
 ### 5.6 Remote Base URL Override (Opt-In Only)
 
@@ -202,13 +240,14 @@ By default, remote E2E is **FORBIDDEN / REFUSED** (per AISE S0 v0.2 §26).
 
 The contract defines the override semantics so that the infrastructure can support future OWNER-authorized remote runs WITHOUT enabling them by default:
 
-- The override requires TWO environment variables simultaneously:
+- The override requires THREE environment variables simultaneously:
   1. `E2E_ALLOW_REMOTE=1` (explicit opt-in flag).
   2. `E2E_REMOTE_BASE_URL=https://...` (the explicit target URL).
-- Both must be set; the runner refuses if only one is set.
-- The override also requires `E2E_REMOTE_AUTH_TOKEN` (a documented authorization reference — not a credential itself, but a token linking to a signed OWNER authorization record stored outside the repo).
-- The override logs the target, environment class, cost/quota class, purpose, and expected request volume in the E2E report.
-- No remote execution is authorized during WP-005 S10 unless OWNER separately approves it. This contract defines the SEMANTICS; it does NOT enable the override.
+  3. `E2E_REMOTE_AUTHORIZATION_REF` (a NON-SECRET reference to a documented OWNER authorization record stored outside the repo — e.g., a work-item ID, a signed-authorization document path, or an AISE R-form reference. This is NOT an access token, NOT a credential, NOT an API secret. It is evidence/reference that OWNER has authorized this specific remote run.)
+- All three must be set; the runner refuses if only one or two are set.
+- The runner does NOT validate the contents of `E2E_REMOTE_AUTHORIZATION_REF` — it only verifies the variable is present and non-empty. The OWNER authorization record itself lives outside the repo (per AISE §25 external parameter gate). The variable is the traceability link to that record.
+- The override logs the target, environment class, cost/quota class, purpose, and expected request volume in the E2E report (including the `E2E_REMOTE_AUTHORIZATION_REF` value for traceability).
+- No remote execution is authorized during WP-005 S10 unless OWNER separately approves it. This contract defines the SEMANTICS only; it does NOT enable the override.
 
 **Protected remote targets (refused even with override unless additional OWNER authorization is provided):**
 
@@ -217,6 +256,17 @@ The contract defines the override semantics so that the infrastructure can suppo
 - Other hosted URLs that resolve to non-loopback addresses
 
 This is intentionally provider-neutral: the runner protects against ANY remote base URL, not just Vercel.
+
+#### Guard self-test semantics (NO external network request)
+
+WP-005 S10 must implement and test the remote-override guard semantics ONLY. The guard self-test verifies that:
+
+- A non-loopback `E2E_BASE_URL` without the override set → REFUSED with `REMOTE_BASE_URL_NOT_AUTHORIZED`.
+- A non-loopback `E2E_BASE_URL` with only `E2E_ALLOW_REMOTE=1` (missing `E2E_REMOTE_BASE_URL` and `E2E_REMOTE_AUTHORIZATION_REF`) → REFUSED.
+- A non-loopback `E2E_BASE_URL` with `E2E_ALLOW_REMOTE=1` + `E2E_REMOTE_BASE_URL` but missing `E2E_REMOTE_AUTHORIZATION_REF` → REFUSED.
+- A non-loopback `E2E_BASE_URL` with all three override variables → ACCEPTED by the guard (the override semantics allow it; whether to actually execute the remote run is a separate OWNER authorization question, NOT exercised by S10).
+
+The guard self-test does NOT make any external network request. It verifies the guard's REFUSE/ACCEPT decision logic by mocking the runner's base-URL validator and asserting the decision. No Vercel, no Preview, no Production network call is performed by any guard test.
 
 ### 5.7 E2E Framework Selection
 
@@ -227,19 +277,20 @@ This is intentionally provider-neutral: the runner protects against ANY remote b
 
 ### 5.8 Test Fixture Strategy
 
-- Fixtures are created ONLY on TEST (positively verified per §5.5).
-- Cleanup runs ONLY on TEST.
-- Each fixture has a unique identifier with a deterministic prefix: `e2e-{ISO-timestamp}-{random-6-hex}` (e.g., `e2e-20260916T120000-a1b2c3`).
-- The runner tracks every created fixture ID in a `createdFixtureIds` registry.
-- Cleanup deletes ONLY fixtures by ID — no broad `TRUNCATE`, no `DELETE FROM offers WHERE ...` without an explicit ID list.
-- Safe reruns after failure: each fixture ID is unique per run, so a failed run leaves orphan fixtures that the next run's pre-flight cleanup can detect by prefix (`e2e-*`) and remove.
+- Fixtures are created ONLY on TEST (positively verified per §5.5 Phase A — NO fixture insert before Phase A passes).
+- Cleanup runs ONLY on TEST (also gated by Phase A — NO cleanup before Phase A passes).
+- **Fixture marking policy**: do NOT replace canonical UUID `id` values with arbitrary prefixed identifiers. The `offers.id` column remains a canonical UUID (per ADR-0009). The test marker is stored in an existing business field — specifically, the `title` field, with a unique prefix `E2E_<run-id>_<scenario>` (e.g., `E2E_20260916T120000_a1b2c3_admin-critical-journey`). No new schema column is added solely for E2E. The marker is a contract-safe existing-field reuse.
+- The runner tracks every created fixture's canonical UUID in a `createdFixtureIds` registry (the actual `offers.id` UUID, not the title marker).
+- **Normal cleanup**: delete exact recorded UUIDs created by that run (by `id`), NOT by title prefix. The title marker is for orphan recovery only — not for normal cleanup.
+- **Orphan recovery cleanup**: find TEST `offers` records whose `title` starts with the E2E marker prefix (`E2E_`), collect their canonical UUIDs, then delete those exact UUIDs. No broad unrestricted `DELETE FROM offers WHERE title LIKE 'E2E-%'` without an explicit UUID list — always delete by `id` after collecting the UUIDs.
+- Safe reruns after failure: each fixture has a unique `title` marker per run (includes timestamp + random hex + scenario), so a failed run leaves orphan fixtures that the next run's pre-flight cleanup can detect by title prefix and remove by canonical UUID.
 - The contract prefers **direct DB helpers** (via Neon SQL tagged templates, same pattern as `__tests__/offers-integration.test.ts`) for fixture setup, NOT application actions. Rationale: direct DB helpers are deterministic, do not depend on the UI being in a specific state, and do not generate rate-limit traffic. Application actions are reserved for the E2E journey itself (which is what we are testing).
 - No public test-only API endpoints. No new application routes added for testing.
 - The fixture helper lives at `tests/e2e/helpers/fixtures.ts` and exposes:
-  - `createTestOffer(overrides)` — inserts a row in `offers` with a unique `id`, returns the row.
-  - `deleteTestOffer(id)` — deletes by `id`.
-  - `cleanupOrphanFixtures(prefix)` — deletes all rows where `id LIKE 'e2e-%'` (used in pre-flight).
-  - `clearTestRateLimit()` — `DELETE FROM "rateLimit"` (scoped to TEST only — the helper positively verifies TEST before executing).
+  - `createTestOffer(overrides)` — inserts a row in `offers` with a canonical UUID `id`, a `title` containing the E2E marker prefix (e.g., `E2E_<run-id>_<scenario>`), and the supplied overrides. Returns the row (including the canonical UUID `id`).
+  - `deleteTestOffer(id)` — deletes by canonical UUID `id` (NOT by title).
+  - `cleanupOrphanFixtures(markerPrefix)` — queries `SELECT id FROM offers WHERE title LIKE '<markerPrefix>%'`, collects the canonical UUIDs, then deletes each by `id`. Used in pre-flight orphan recovery.
+  - `clearTestRateLimit()` — `DELETE FROM "rateLimit"` (scoped to TEST only — the helper positively verifies TEST in Phase A before executing; per §5.10 ordering, this MUST happen AFTER Phase A passes, NEVER before).
 
 ### 5.9 Test Isolation
 
@@ -247,16 +298,17 @@ This is intentionally provider-neutral: the runner protects against ANY remote b
 - Tests within a single spec MAY share a fixture ONLY if they represent one continuous user journey (e.g., the 15-step critical journey uses ONE offer across all 15 steps).
 - Tests across specs MUST NOT depend on each other's state.
 - No "test 5 assumes test 4 published the offer" pattern unless the entire spec is intentionally one journey.
-- The runner resets relevant TEST state (rate limit, orphan fixtures with `e2e-` prefix) before each spec via `beforeAll` in a shared setup helper.
+- The runner resets relevant TEST state (rate limit, orphan fixtures with `E2E_` title marker) before each spec via `beforeAll` in a shared setup helper — but ONLY AFTER Phase A target verification has passed (per §5.10 ordering invariant and §16 Mutation Ordering Invariant).
 
 ### 5.10 Rate Limit Handling
 
 - Better Auth's database-backed rate limiter persists counts across test runs (verified during WP-002). E2E must handle this safely.
+- **Ordering invariant**: VERIFY TEST TARGET FIRST (Phase A), THEN cleanup TEST `rateLimit`. NEVER: cleanup THEN verify target. Any cleanup counts as a TEST mutation, so per §16 it MUST happen after target certification.
 - The E2E setup helper clears the TEST `rateLimit` table BEFORE each spec that performs login, using the same pattern as `__tests__/auth-regression.test.ts` `beforeEach`:
   ```ts
   await rawSql`DELETE FROM "rateLimit"`;
   ```
-- This targets TEST only (the helper positively verifies TEST before executing).
+- This targets TEST only (the helper positively verifies TEST in Phase A before executing — see §5.5).
 - NEVER clear the DEV `rateLimit` during E2E.
 - NEVER disable security globally (do NOT set `rateLimit.enabled = false` in `auth.ts`).
 - Each login uses the canonical sleep pattern (1000ms between admin logins, 500ms between mixed logins) — same as `__tests__/auth-regression.test.ts`.
@@ -264,11 +316,20 @@ This is intentionally provider-neutral: the runner protects against ANY remote b
 
 ### 5.11 Auth Test Identities
 
-- ADMIN identity: use the bootstrapped `admin1` user (credentials from `.env.local`: `INITIAL_ADMIN_LOGIN`, `INITIAL_ADMIN_PASSWORD`).
-- FANTOMAS identity: use the bootstrapped `fantomas` user (credentials from `.env.local`: `FANTOMAS_INITIAL_PASSWORD`, `FANTOMAS_EMAIL`).
-- These identities already exist in TEST (verified at WP-002 + WP-003 closure).
+- ADMIN identity: the bootstrapped `admin1` user (credentials from `.env.local`: `INITIAL_ADMIN_LOGIN`, `INITIAL_ADMIN_PASSWORD`).
+- FANTOMAS identity: the bootstrapped `fantomas` user (credentials from `.env.local`: `FANTOMAS_INITIAL_PASSWORD`, `FANTOMAS_EMAIL`).
+- **Deterministic TEST identity preparation**: WP-005 MUST NOT make E2E reproducibility depend on historical TEST state. The runner uses the existing canonical bootstrap mechanism (`pnpm db:bootstrap` → `db/bootstrap/bootstrap.ts`) deterministically, scoped to verified TEST only. Conceptual sequence:
+  1. VERIFY TEST TARGET (Phase A — §5.5).
+  2. Inject `DATABASE_URL=TEST_DATABASE_URL` into the bootstrap process environment (NO inherited parent `DATABASE_URL`).
+  3. Run the existing TEST-safe bootstrap/ensure step (`pnpm db:bootstrap` with `DATABASE_URL=TEST_DATABASE_URL`). The bootstrap is idempotent (verified at WP-002 closure): if `admin1` and `fantomas` already exist, it does NOT overwrite their credentials or `principalType`; it only creates them if missing.
+  4. Verify the ADMIN identity exists in TEST (direct read-only SQL: `SELECT id, username, principal_type FROM "user" WHERE username = 'admin1'`).
+  5. Verify the FANTOMAS identity exists in TEST (direct read-only SQL: `SELECT id, username, principal_type FROM "user" WHERE username = 'fantomas'`).
+  6. If both identities exist (either pre-existing or just bootstrapped), proceed to E2E execution.
+  7. If existing bootstrap CANNOT safely satisfy this requirement (e.g., it requires schema changes, or it cannot be scoped to TEST deterministically), S10 MUST STOP and report `E2E_TEST_IDENTITY_PREPARATION_GAP`.
+- Do NOT bootstrap DEV.
+- Do NOT bootstrap Production.
+- Do NOT introduce a second authentication implementation. Better Auth remains the identity/session authority.
 - No Production credentials. No DEV credentials. No secret values committed to Git.
-- Do NOT invent a second authentication model. Better Auth remains the identity/session authority.
 - The `principalType` / `can()` model remains canonical (per ADR-0004, AISE §21).
 - The E2E suite logs in via the real `/admin/login` UI (Better Auth client API), NOT via direct session creation. This exercises the real auth boundary.
 - The FANTOMAS test verifies that FANTOMAS inherits all ADMIN capabilities AND has Fantomas-only capabilities (e.g., `system:bootstrap`) — same as `__tests__/authorization.test.ts` but through the real UI.
@@ -460,9 +521,9 @@ This section documents how the MS-006 CI pipeline SHOULD consume the WP-005 E2E 
 GitHub Actions CI runner
   → checkout repository
   → install pnpm dependencies
-  → provision a dedicated CI test database (Neon preview branch OR a CI service container PostgreSQL)
+  → provision a dedicated CI test database that is COMPATIBLE with the canonical database architecture and driver (Drizzle + neon-http). A Neon-compatible TEST/CI resource is the current natural option. Any alternate PostgreSQL runtime (e.g., a generic CI service-container PostgreSQL) requires explicit technical compatibility validation during MS-006 — the neon-http driver may not work against arbitrary PostgreSQL instances. Do NOT prescribe a generic PostgreSQL service container at WP-005 without compatibility proof.
   → run `pnpm lint`, `pnpm typecheck`, `pnpm test` (Vitest unit + integration + component), `pnpm build`
-  → run `pnpm test:e2e` against the local Next.js server spawned inside the runner, pointing at the dedicated CI test database
+  → run `pnpm test:e2e` against the local Next.js server spawned inside the runner, pointing at the dedicated CI test database (compatible with Drizzle + neon-http; selected during MS-006)
   → local Chromium (Playwright-managed) executes the E2E specs
   → no remote deployed application is the test target
 ```
@@ -471,6 +532,11 @@ GitHub Actions CI runner
 - On every PR: lint + typecheck + Vitest + build.
 - On push to `main`: lint + typecheck + Vitest + build + E2E.
 - On PR with label `run-e2e`: lint + typecheck + Vitest + build + E2E (opt-in cost control).
+
+**MS-006 database decision (per owner §12):**
+- MS-006 must select a dedicated CI TEST database/runtime compatible with the canonical database architecture and driver. A Neon-compatible TEST/CI resource is the current natural option.
+- Any alternate PostgreSQL runtime (e.g., a generic CI service-container PostgreSQL) requires explicit technical compatibility validation during MS-006 — the `neon-http` driver may not work against arbitrary PostgreSQL instances, and the `Drizzle` ORM configuration may also differ.
+- WP-005 does NOT prescribe a generic PostgreSQL service container for MS-006. The MS-006 database/runtime selection is deferred to MS-006 boundary.
 
 **CI secrets (per S6 §13, ADR-0006):**
 - `TEST_DATABASE_URL` supplied as a CI secret — NEVER committed, NEVER derived from Production credentials, NEVER using `DEV_DATABASE_URL` as fallback.
@@ -489,30 +555,70 @@ GitHub Actions CI runner
 ### 8.1 E2E Runner Pre-Flight (Fail-Closed)
 
 ```
+=== PHASE A — TARGET VERIFICATION (NO MUTATION) ===
 1. Parse .env.local via canonical parseEnvLocal() helper
 2. Read TEST_DATABASE_URL
 3. If TEST_DATABASE_URL missing → STOP: MISSING_TEST_DATABASE_URL
-4. If TEST_DATABASE_URL starts with "file:" → STOP: TEST_IS_SQLITE_FALLBACK
+4. URL type/scheme validation:
+   - If TEST_DATABASE_URL scheme is not "postgresql://" → STOP: TEST_UNSUPPORTED_SCHEME
+   - If TEST_DATABASE_URL starts with "file:" → STOP: TEST_IS_SQLITE_FALLBACK
 5. Parse URL hostname of TEST_DATABASE_URL → record as testHost
-6. If DEV_DATABASE_URL present and its hostname == testHost → STOP: TEST_EQUALS_DEV
-7. If PROD_DATABASE_URL present and its hostname == testHost → STOP: TEST_EQUALS_PROD
-8. Reachability probe: SELECT 1 AS one on TEST_DATABASE_URL → if fail, STOP: TEST_DB_UNREACHABLE
-9. Identity probe: SELECT current_database() AS db → record as testDbName
-10. Read E2E_BASE_URL (default: http://127.0.0.1:3000)
-11. Parse E2E_BASE_URL hostname; if not loopback (127.0.0.1, localhost, ::1):
-    a. If E2E_ALLOW_REMOTE=1 AND E2E_REMOTE_BASE_URL set AND E2E_REMOTE_AUTH_TOKEN set:
-       → continue with explicit remote override (log target, class, purpose, expected volume)
-    b. Else: STOP: REMOTE_BASE_URL_NOT_AUTHORIZED
-12. Pre-flight cleanup: DELETE FROM offers WHERE id LIKE 'e2e-%'; DELETE FROM "rateLimit"
-13. Build Next.js: pnpm build (skip if fresh build artifact exists)
-14. Spawn Next.js: next start --port <PORT> with env DATABASE_URL=TEST_DATABASE_URL (+ other required env vars)
-15. Readiness probe: poll http://127.0.0.1:<PORT>/ until 200 or timeout (30s)
-16. Live target verification: insert a probe fixture via the running app's Server Action; verify via direct Neon SQL on TEST_DATABASE_URL that the row landed in TEST → if mismatch, STOP: APP_DB_DIVERGENCE
-17. Run Playwright E2E suite
-18. Shutdown Next.js (SIGTERM)
-19. Cleanup: DELETE FROM offers WHERE id LIKE 'e2e-%'; DELETE FROM "rateLimit" (TEST only)
-20. Emit report with quota-safety evidence block
+6. Read E2E_EXPECTED_TEST_DATABASE_HOST (from .env.local, or .env.example as fallback)
+   - If hostname(TEST_DATABASE_URL) != E2E_EXPECTED_TEST_DATABASE_HOST → STOP: TEST_FINGERPRINT_MISMATCH
+7. If DEV_DATABASE_URL present and its hostname == testHost → STOP: TEST_EQUALS_DEV
+8. If PROD_DATABASE_URL present and its hostname == testHost → STOP: TEST_EQUALS_PROD
+9. Read-only connectivity probe: SELECT 1 AS one on TEST_DATABASE_URL → if fail, STOP: TEST_DB_UNREACHABLE
+10. Read-only identity probe: SELECT current_database() AS db, current_setting('server_version') AS version → record as testDbName
+11. Base URL policy check:
+    - Read E2E_BASE_URL (default: http://127.0.0.1:3000)
+    - Parse E2E_BASE_URL hostname; if not loopback (127.0.0.1, localhost, ::1):
+      a. If E2E_ALLOW_REMOTE=1 AND E2E_REMOTE_BASE_URL set AND E2E_REMOTE_AUTHORIZATION_REF set:
+         → continue with explicit remote override (log target, class, purpose, expected volume, authorization ref)
+      b. Else: STOP: REMOTE_BASE_URL_NOT_AUTHORIZED
+
+=== PHASE A PASSED — TARGET CERTIFIED. NOW MUTATIONS ARE ALLOWED ===
+
+12. Orphan recovery cleanup (TEST only, by exact canonical UUID):
+    - Query: SELECT id FROM offers WHERE title LIKE 'E2E_%'
+    - For each UUID: DELETE FROM offers WHERE id = <uuid>
+13. TEST rateLimit cleanup (TEST only): DELETE FROM "rateLimit"
+14. Deterministic TEST identity preparation (per §5.11):
+    - Inject DATABASE_URL=TEST_DATABASE_URL into the bootstrap process environment (NO inherited parent DATABASE_URL)
+    - Run pnpm db:bootstrap (idempotent — creates admin1/fantomas only if missing; does NOT overwrite existing)
+    - Verify admin1 exists: SELECT id FROM "user" WHERE username = 'admin1' → if missing, STOP: E2E_TEST_IDENTITY_PREPARATION_GAP
+    - Verify fantomas exists: SELECT id FROM "user" WHERE username = 'fantomas' → if missing, STOP: E2E_TEST_IDENTITY_PREPARATION_GAP
+15. Construct the child Next.js process environment EXPLICITLY (curated allowlist):
+    - Remove/override any inherited DATABASE_URL
+    - Inject DATABASE_URL=TEST_DATABASE_URL (the positively verified TEST value)
+    - Inject other required env vars: BETTER_AUTH_SECRET, BETTER_AUTH_URL, INITIAL_ADMIN_LOGIN, INITIAL_ADMIN_PASSWORD, FANTOMAS_INITIAL_PASSWORD, FANTOMAS_EMAIL, INITIAL_ADMIN_EMAIL, NEXT_PUBLIC_SITE_URL
+16. Build Next.js: pnpm build (skip if fresh build artifact exists)
+17. Spawn Next.js: next start --port <PORT> with the explicitly constructed env (NO inherited parent DATABASE_URL)
+18. Readiness probe: poll http://127.0.0.1:<PORT>/ until 200 or timeout (30s)
+
+=== PHASE B — OPTIONAL SAFE POST-SPAWN TARGET CONFIRMATION (read-only via public read path) ===
+19. Seed a uniquely identifiable PUBLISHED sentinel DIRECTLY into TEST via the runner's TEST-verified Neon SQL connection (NOT through the application):
+    - title = "E2E_SENTINEL_<run-id>"
+    - status = 'PUBLISHED'
+    - Record the sentinel's canonical UUID
+20. Through the public read path (GET /), verify the application can see that sentinel:
+    - Fetch http://127.0.0.1:<PORT>/
+    - Assert the sentinel title appears in the PUBLISHED offer list
+    - If sentinel NOT visible within readiness timeout → STOP: APP_DB_DIVERGENCE
+    - (This proves the application is reading the expected TEST state — if the application's DB ≠ TEST, the sentinel would not be visible.)
+21. Cleanup the sentinel from TEST only (by the exact recorded canonical UUID)
+
+=== E2E EXECUTION ===
+22. Run Playwright E2E suite (each spec creates its own fixtures with E2E_<run-id>_<scenario> title marker; normal cleanup by exact canonical UUID)
+23. Shutdown Next.js (SIGTERM)
+24. Post-run cleanup: delete all recorded fixture UUIDs (by id); orphan recovery by title prefix 'E2E_'; DELETE FROM "rateLimit" (TEST only)
+25. Emit report with quota-safety evidence block
 ```
+
+**Critical ordering invariants:**
+- Steps 1-11 (Phase A) are READ-ONLY — NO mutation of any target.
+- Step 12+ (orphan cleanup, rateLimit cleanup, bootstrap, fixture insert, browser actions) MAY mutate TEST ONLY AFTER Phase A passes.
+- Step 19 sentinel insert uses the runner's TEST-verified Neon SQL connection — it NEVER goes through the application Server Action.
+- A parent `.env` `DATABASE_URL=file:...` SQLite fallback is NEUTRALIZED at step 15 (removed from the child env); step 17 spawns with the explicit TEST injection only.
 
 ### 8.2 Critical Journey Flow (15 steps, single offer, single spec)
 
@@ -532,7 +638,7 @@ QUOTA-SAFETY EVIDENCE:
   POLLING:                NO
   PRODUCTION:             NOT TOUCHED
   DEV MUTATED:            NO
-  TEST MUTATED:           YES (fixtures with e2e- prefix; rateLimit cleared)
+  TEST MUTATED:           YES (fixtures with E2E_ title marker; rateLimit cleared in TEST only)
 ```
 
 ---
@@ -619,28 +725,35 @@ The following numbered acceptance criteria MUST all be met for S11 to PASS. They
 
 | AC ID | Criterion |
 |---|---|
-| AC-010 | E2E runner reads `TEST_DATABASE_URL` from `.env.local` and injects `DATABASE_URL=$TEST_DATABASE_URL` into the spawned Next.js process (overriding any parent value) |
+| AC-010 | E2E runner reads `TEST_DATABASE_URL` from `.env.local`, performs Phase A target verification (read-only), and injects `DATABASE_URL=$TEST_DATABASE_URL` into the spawned Next.js process — the child environment is built from a curated allowlist; any inherited parent `DATABASE_URL` is removed/overridden |
 | AC-011 | Runner refuses to start if `TEST_DATABASE_URL` is missing (error: `MISSING_TEST_DATABASE_URL`) |
-| AC-012 | Runner refuses to start if `TEST_DATABASE_URL` URL scheme is `file:` (error: `TEST_IS_SQLITE_FALLBACK`) |
+| AC-012 | Runner refuses to start if `TEST_DATABASE_URL` URL scheme is not `postgresql://` — specifically `file:` (error: `TEST_IS_SQLITE_FALLBACK`) or any other non-postgresql scheme (error: `TEST_UNSUPPORTED_SCHEME`) |
+| AC-012a | Runner performs positive TEST fingerprint comparison: hostname(`TEST_DATABASE_URL`) MUST equal `E2E_EXPECTED_TEST_DATABASE_HOST` (error: `TEST_FINGERPRINT_MISMATCH` if not). The expected hostname is read from `.env.local` (or `.env.example` as fallback) — it is a non-secret project-local config value, NOT a credential |
 | AC-013 | Runner refuses to start if `TEST_DATABASE_URL` host matches `DEV_DATABASE_URL` host (error: `TEST_EQUALS_DEV`) |
 | AC-014 | Runner refuses to start if `TEST_DATABASE_URL` host matches `PROD_DATABASE_URL` host (error: `TEST_EQUALS_PROD`) |
-| AC-015 | Runner refuses to start if `TEST_DATABASE_URL` is unreachable (error: `TEST_DB_UNREACHABLE`) |
+| AC-015 | Runner refuses to start if `TEST_DATABASE_URL` is unreachable (error: `TEST_DB_UNREACHABLE`) — probe is READ-ONLY (`SELECT 1 AS one`) |
 | AC-016 | Runner refuses to start if base URL is non-loopback without explicit remote override (error: `REMOTE_BASE_URL_NOT_AUTHORIZED`) |
-| AC-017 | Runner performs live target verification: inserts a probe fixture via the running app, verifies via direct Neon SQL that the row landed in TEST (error: `APP_DB_DIVERGENCE` if mismatch) |
-| AC-018 | A parent `.env` `DATABASE_URL=file:...` SQLite fallback does NOT silently redirect the suite (runner uses `TEST_DATABASE_URL` regardless of parent) |
+| AC-017 | Runner performs SAFE post-spawn target confirmation (Phase B): seeds a uniquely identifiable PUBLISHED sentinel DIRECTLY into TEST via the runner's TEST-verified Neon SQL connection (NOT through the application Server Action), then verifies via the public read path (`GET /`) that the application can see the sentinel. If sentinel NOT visible → STOP with `APP_DB_DIVERGENCE`. The sentinel insert NEVER goes through an application whose DB target has not already been certified |
+| AC-017a | NO write-based target verification is performed. The previous proposal ("insert probe fixture via the running app's Server Action, then verify the row landed in TEST") is REMOVED. Guard test AC-037a verifies no such write-probe exists in the runner code |
+| AC-018 | A parent `.env` `DATABASE_URL=file:...` SQLite fallback does NOT silently redirect the suite. The runner constructs the child env explicitly (curated allowlist), removes/overrides any inherited parent `DATABASE_URL`, and injects `DATABASE_URL=TEST_DATABASE_URL`. Guard test AC-037 verifies: (A) parent value NOT used; (B) application receives TEST; (C) NO mutation before target certification |
+| AC-019 | Mutation ordering invariant (§16): NO state mutation occurs before Phase A target certification. Steps 1-11 of the runner pre-flight are READ-ONLY. Orphan cleanup, rateLimit cleanup, bootstrap, fixture insert, browser actions all occur AFTER Phase A passes. Guard test AC-037b verifies this ordering by simulating a parent env where `DATABASE_URL=file:...` and asserting no `DELETE`/`INSERT` SQL is issued before target certification |
 
 ### Guard Self-Tests
 
 | AC ID | Criterion |
 |---|---|
 | AC-030 | `tests/e2e/guards.spec.ts` (or equivalent unit-level guard tests under `__tests__/e2e-guards.test.ts`) verifies: local target allowed |
-| AC-031 | Guard test verifies: remote target denied by default |
-| AC-032 | Guard test verifies: TEST DB allowed |
-| AC-033 | Guard test verifies: DEV DB denied for E2E |
-| AC-034 | Guard test verifies: Production DB denied for E2E |
-| AC-035 | Guard test verifies: unknown DB denied (no silent execution) |
-| AC-036 | Guard test verifies: SQLite fallback denied |
-| AC-037 | Guard test verifies: parent `DATABASE_URL` contamination does not silently redirect execution (simulates the WP-004 incident) |
+| AC-031 | Guard test verifies: remote target denied by default. The guard self-test does NOT make any external network request — it mocks the runner's base-URL validator and asserts the REFUSE decision |
+| AC-032 | Guard test verifies: TEST DB allowed (verified TEST fingerprint + read-only probe pass) |
+| AC-033 | Guard test verifies: DEV DB denied for E2E (`TEST_EQUALS_DEV` error) |
+| AC-034 | Guard test verifies: Production DB denied for E2E (`TEST_EQUALS_PROD` error) |
+| AC-035 | Guard test verifies: unknown DB denied (no silent execution — `TEST_FINGERPRINT_MISMATCH` error) |
+| AC-036 | Guard test verifies: SQLite fallback denied (`TEST_IS_SQLITE_FALLBACK` error) |
+| AC-037 | Guard test verifies: parent `DATABASE_URL` contamination does not silently redirect execution. Simulates parent env with `DATABASE_URL=file:...` and asserts: (A) the parent value is NOT used by the child process; (B) the child application receives `DATABASE_URL=TEST_DATABASE_URL` (positively verified TEST); (C) NO mutation occurs before target certification. No external network request is made |
+| AC-037a | Guard test verifies: no write-based target probe exists in the runner code. A static check (grep / AST scan) confirms the runner does NOT insert probe fixtures via the application Server Action as a target-verification mechanism. The only post-spawn confirmation is the Phase B sentinel approach (AC-017) which inserts via direct Neon SQL on the certified TEST connection |
+| AC-037b | Guard test verifies: the mutation ordering invariant (§16) is enforced. The runner's pre-flight sequence issues NO `INSERT`/`UPDATE`/`DELETE` SQL before Phase A target certification. Verified by mocking the SQL client and asserting the SQL traffic log is empty during steps 1-11 |
+| AC-037c | Guard test verifies: remote override requires all THREE variables (`E2E_ALLOW_REMOTE=1` + `E2E_REMOTE_BASE_URL` + `E2E_REMOTE_AUTHORIZATION_REF`). Missing any one → REFUSED. The guard self-test does NOT make any external network request — it verifies the REFUSE/ACCEPT decision logic only |
+| AC-037d | Guard test verifies: `E2E_REMOTE_AUTHORIZATION_REF` is treated as a non-secret reference (a string identifier), NOT validated as a credential/token. The runner only checks the variable is present and non-empty; it does NOT attempt to authenticate with the value |
 
 ### Critical User Journeys
 
@@ -672,7 +785,7 @@ The following numbered acceptance criteria MUST all be met for S11 to PASS. They
 | AC-091 | E2E does NOT clear DEV `rateLimit` (guard test verifies) |
 | AC-092 | E2E does NOT disable rate limiter globally (auth.ts `rateLimit.enabled` remains `true`) |
 | AC-093 | E2E does NOT touch Production (no `PROD_DATABASE_URL` reads beyond divergence check; no writes) |
-| AC-094 | E2E cleanup deletes only `e2e-`-prefixed fixtures (no broad truncation) |
+| AC-094 | E2E cleanup deletes only fixtures by exact canonical UUID (collected from title prefix `E2E_`). No broad `TRUNCATE`. No unrestricted `DELETE FROM offers WHERE title LIKE 'E2E_%'` without an explicit UUID list — always delete by `id` after collecting the UUIDs. Normal cleanup uses exact recorded UUIDs; orphan recovery uses title prefix to discover UUIDs, then deletes by UUID. No new schema column added solely for E2E (the marker lives in the `title` business field) |
 | AC-095 | No Vercel configuration added (no `vercel.json`, no Vercel env vars, no Vercel CLI) |
 | AC-096 | No CI workflow added (no `.github/workflows/`) |
 
@@ -706,12 +819,16 @@ S11 for WP-005 must independently verify the INFRASTRUCTURE itself, not only the
 | Category | Verification |
 |---|---|
 | Local browser run | `pnpm test:e2e` runs successfully on a clean checkout with TEST_DATABASE_URL set |
-| TEST database positively identified | Live target verification (AC-017) passes; report shows actual TEST database name |
-| DEV untouched | Run a parallel `pg_dump` of DEV before and after E2E — diff is empty (no schema, no data, no rateLimit changes) |
-| Production untouched | No `PROD_DATABASE_URL` reads beyond divergence check; no writes; no migrations |
-| Remote URL guard works | Guard test AC-031 passes: setting `E2E_BASE_URL=https://example.com` without override → runner refuses |
-| Unknown DB guard works | Guard test AC-035 passes: removing `TEST_DATABASE_URL` → runner refuses |
-| Fixture cleanup works | Post-run DB query: `SELECT COUNT(*) FROM offers WHERE id LIKE 'e2e-%'` returns 0 |
+| TEST database positively identified | Phase A target verification (AC-010 through AC-012a) passes; report shows actual TEST database name + actual TEST host matching `E2E_EXPECTED_TEST_DATABASE_HOST` |
+| TEST fingerprint guard | AC-012a passes: hostname(`TEST_DATABASE_URL`) == `E2E_EXPECTED_TEST_DATABASE_HOST` |
+| Mutation ordering invariant | AC-019 + AC-037b pass: no SQL mutation before Phase A target certification |
+| SAFE post-spawn target confirmation | AC-017 passes: Phase B sentinel visible via public read path. AC-017a passes: no write-based probe through the application |
+| Parent DATABASE_URL contamination refused | AC-018 + AC-037 pass: parent `DATABASE_URL=file:...` is NEUTRALIZED; child receives TEST; no mutation before certification |
+| DEV untouched | E2E never connects to DEV (guard test AC-033 + AC-091 verify). S11 confirms by inspecting the runner code and the SQL traffic log: no connection to `DEV_DATABASE_URL` is opened during the run |
+| Production untouched | No `PROD_DATABASE_URL` reads beyond divergence check; no writes; no migrations. S11 confirms by inspecting the runner code: no `PROD_DATABASE_URL` connection is opened |
+| Remote URL guard works | Guard test AC-031 passes: setting `E2E_BASE_URL=https://example.com` without override → runner refuses. No external network request made by the guard test |
+| Unknown DB guard works | Guard test AC-035 passes: removing `TEST_DATABASE_URL` (or pointing to an unknown host) → runner refuses with `MISSING_TEST_DATABASE_URL` or `TEST_FINGERPRINT_MISMATCH` |
+| Fixture cleanup works | Post-run DB query: `SELECT COUNT(*) FROM offers WHERE title LIKE 'E2E_%'` returns 0 (all E2E fixtures have `E2E_` title marker; cleanup deletes by exact canonical UUID, so no `E2E_`-titled rows remain after a successful run) |
 | Critical user journeys pass | AC-050 through AC-055 all PASS |
 | Failure artifacts work | Force a deliberate failure (e.g., break a spec temporarily) → screenshot + trace generated in `.artifacts/` |
 | Existing 149 tests still pass | AC-072 + AC-075 PASS |
@@ -722,8 +839,10 @@ S11 for WP-005 must independently verify the INFRASTRUCTURE itself, not only the
 S11 must produce real, non-mocked evidence:
 - Actual Playwright run logs (console output captured).
 - Actual screenshot of a successful critical journey step (optional, used as evidence).
-- Actual DB query results showing fixture cleanup.
-- Actual `pg_dump` diff showing DEV unchanged (or equivalent DB-level evidence).
+- Actual DB query results showing fixture cleanup (`SELECT COUNT(*) FROM offers WHERE title LIKE 'E2E_%'` returns 0).
+- Actual Phase A target verification output: `TEST_DATABASE_URL` host + `E2E_EXPECTED_TEST_DATABASE_HOST` comparison + `current_database()` result.
+- Actual Phase B sentinel confirmation: the sentinel title appeared in `GET /` HTML response.
+- Actual SQL traffic log: steps 1-11 of the runner pre-flight issue NO `INSERT`/`UPDATE`/`DELETE` (mutation ordering invariant verified).
 - Actual JSON report with quota-safety block.
 
 Do NOT accept only mocked evidence. The infrastructure must really run.
@@ -744,11 +863,67 @@ Per AISE S0 v0.2 §26, the WP-005 verification model:
 | POLLING | NO (no scheduled runs, no cron, no background monitoring per S0 §23) |
 | PRODUCTION | NOT TOUCHED (no `PROD_DATABASE_URL` writes; no migrations; no bootstrap) |
 | DEV MUTATED DURING FINAL VERIFICATION | NO (E2E never connects to DEV; guard test verifies) |
-| TEST MUTATED | YES (fixtures with `e2e-` prefix created/cleaned; `rateLimit` cleared in TEST only) |
+| TEST MUTATED | YES (fixtures with `E2E_` title marker created/cleaned; `rateLimit` cleared in TEST only) |
 
 ---
 
-## 16. Non-Blocking Historical Finding (Carried Forward from WP-004)
+## 16. Mutation Ordering Invariant (Frozen)
+
+**FROZEN CONTRACT INVARIANT**: NO STATE MUTATION BEFORE TARGET CERTIFICATION.
+
+This invariant is the single most important safety rule for WP-005. It directly addresses the WP-004 environment incident class (parent `DATABASE_URL` contamination could have caused a mutation against an uncertified target).
+
+**Required sequence — ALWAYS:**
+
+```
+IDENTIFY target
+  → VERIFY target identity (Phase A — read-only)
+  → AUTHORIZE target for mutation (Phase A passes)
+  → MUTATE target (fixture insert, fixture cleanup, rateLimit cleanup, bootstrap, test user creation, offer creation, browser actions)
+```
+
+**Forbidden sequence — NEVER:**
+
+```
+MUTATE target
+  → VERIFY target identity afterward
+```
+
+**Scope of "mutation":**
+- `INSERT` into any table (offers, user, session, account, verification, rateLimit)
+- `DELETE` from any table (including rateLimit cleanup, orphan cleanup)
+- `UPDATE` to any table
+- `TRUNCATE`
+- Bootstrap execution (which creates users)
+- Test user creation
+- Offer creation (via direct DB helper OR via application Server Action)
+- Browser actions that trigger Server Actions (login, create, edit, publish, suspend, republish, archive, logout)
+
+**Phase A (read-only) steps that MUST complete before any mutation:**
+1. Parse `.env.local` via `parseEnvLocal()`
+2. Read `TEST_DATABASE_URL`
+3. Validate URL type/scheme (`postgresql://` only; reject `file:`, `mysql:`, etc.)
+4. Positive TEST fingerprint comparison (`hostname(TEST_DATABASE_URL) == E2E_EXPECTED_TEST_DATABASE_HOST`)
+5. Read-only refuse-non-TEST guards (`hostname != DEV host`, `hostname != PROD host`)
+6. Read-only connectivity probe (`SELECT 1 AS one`)
+7. Read-only identity probe (`SELECT current_database() AS db`)
+8. Base URL policy check (loopback only, or explicit remote override)
+9. Construct child process environment explicitly (curated allowlist, NO inherited `DATABASE_URL`)
+10. Inject `DATABASE_URL=TEST_DATABASE_URL` (positively verified TEST value)
+
+Only after Phase A passes may any mutation occur. The runner's pre-flight sequence (steps 1-11 of §8.1) is READ-ONLY — verified by guard test AC-037b.
+
+**Phase B (optional, SAFE post-spawn confirmation) is NOT a mutation-verification step:**
+- Phase B seeds a PUBLISHED sentinel DIRECTLY into TEST via the runner's TEST-verified Neon SQL connection (NOT through the application).
+- Phase B verifies via the public read path (`GET /`) that the application can see the sentinel.
+- The sentinel insert is a TEST mutation, but it happens AFTER Phase A has certified TEST, so it is safe.
+- The sentinel insert NEVER goes through an application whose DB target has not already been certified.
+
+**This invariant is FROZEN. Any future change requires a CONTRACT DIVERGENCE PROTOCOL (R3) invocation and OWNER authorization.**
+
+---
+
+## 17. Non-Blocking Historical Finding (Carried Forward from WP-004)
 
 The WP-004 post-merge environment incident (parent `.env` `DATABASE_URL=file:...` SQLite fallback leaked into the test process while the authorized target was `TEST_DATABASE_URL`) is recorded as a NON-BLOCKING HISTORICAL FINDING. It informed the design of this WP-005 contract (§5.3 Environment Target Contract, §5.5 Database Target Identity Verification, AC-018). It is NOT an open defect — it is a design input.
 
@@ -756,19 +931,19 @@ The S10 initial test-count reporting discrepancy from WP-004 (S10 reported 59 un
 
 ---
 
-## 17. Work Branch
+## 18. Work Branch
 
 Recommended work branch for S10 (per owner §51): `wp/005-e2e-test-infrastructure`.
 
 This branch is NOT created during S9. S10 creates it after OWNER APPROVE + AUTHORIZE.
 
-The branch is created from `dev` at `484898e5b513d1313f458880a6fc6b32175aa990` (the canonical dev head at S9 start).
+The branch is created from `dev` at `6278315929868210ed9ac96a80748e6f471b0c25` (the canonical dev head AFTER the approved S9 contract was committed — the previous stale baseline `484898e5b513d1313f458880a6fc6b32175aa990` was the dev head BEFORE the S9 contract; S10 MUST include the approved S9 contract baseline, so the branch MUST be created from `6278315`).
 
 After S11 PASS + OWNER ACCEPT + closure, S10 work is fast-forward merged to `dev` (per established convention: `git merge --ff-only wp/005-e2e-test-infrastructure`). The work branch is RETAINED (not deleted), matching the convention established for WP-001 through WP-004.
 
 ---
 
-## 18. S9 Final State
+## 19. S9 Final State
 
 After this S9 operation:
 
@@ -781,7 +956,7 @@ After this S9 operation:
 | CI (`.github/`) | UNCHANGED (no CI workflow created) |
 | Vercel | UNCHANGED (no Vercel config) |
 | `main` branch | UNCHANGED (still `0bc77a7`) |
-| `dev` branch | UNCHANGED (still `484898e`) |
+| `dev` branch | UNCHANGED (still `6278315` — initial S9 contract committed at `6278315`; this patch operation adds a new commit on top of `6278315`) |
 | Worktree | CLEAN |
 | WP-005 implementation | NOT STARTED |
 | Playwright | NOT installed (S10 will install) |
@@ -793,17 +968,17 @@ After this S9 operation:
 
 ---
 
-## 19. Files Modified by S9
+## 20. Files Modified by S9
 
 | File | Action | Notes |
 |---|---|---|
-| `docs/planning/work-packages/WP-005-E2E-TEST-INFRASTRUCTURE.md` | CREATED | This contract (documentation-only) |
+| `docs/planning/work-packages/WP-005-E2E-TEST-INFRASTRUCTURE.md` | CREATED (initial S9) + PATCHED (this S9 patch operation) | This contract (documentation-only) |
 
-No other files are modified, created, or deleted by S9.
+No other files are modified, created, or deleted by S9 (initial or this patch).
 
 ---
 
-## 20. Risk Register (Material Risks for S10)
+## 21. Risk Register (Material Risks for S10)
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
@@ -816,7 +991,7 @@ No other files are modified, created, or deleted by S9.
 
 ---
 
-## 21. Owner Authorization Required
+## 22. Owner Authorization Required
 
 | Authorization | Required For |
 |---|---|
@@ -829,7 +1004,7 @@ No further authorization is requested by this S9 operation.
 
 ---
 
-## 22. References
+## 23. References
 
 - AISE S0 v0.2 §26 (REMOTE RUNTIME COST & QUOTA SAFETY)
 - AISE S0 §23 (Zero Scheduled Work)
