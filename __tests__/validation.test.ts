@@ -49,7 +49,7 @@ describe("offerSchema validation", () => {
   it("rejects invalid email format for applicationEmail", () => {
     const result = offerSchema.safeParse({
       title: "Test",
-      description: {},
+      description: { type: "doc", content: [] },
       applicationEmail: "not-an-email",
     });
     expect(result.success).toBe(false);
@@ -58,7 +58,7 @@ describe("offerSchema validation", () => {
   it("accepts valid email for applicationEmail", () => {
     const result = offerSchema.safeParse({
       title: "Test",
-      description: {},
+      description: { type: "doc", content: [] },
       applicationEmail: "contact@example.com",
     });
     expect(result.success).toBe(true);
@@ -67,7 +67,7 @@ describe("offerSchema validation", () => {
   it("accepts empty string for applicationEmail (optional)", () => {
     const result = offerSchema.safeParse({
       title: "Test",
-      description: {},
+      description: { type: "doc", content: [] },
       applicationEmail: "",
     });
     expect(result.success).toBe(true);
@@ -76,7 +76,7 @@ describe("offerSchema validation", () => {
   it("rejects invalid URL for sourceUrl", () => {
     const result = offerSchema.safeParse({
       title: "Test",
-      description: {},
+      description: { type: "doc", content: [] },
       sourceUrl: "not-a-url",
     });
     expect(result.success).toBe(false);
@@ -85,7 +85,7 @@ describe("offerSchema validation", () => {
   it("accepts valid URL for sourceUrl", () => {
     const result = offerSchema.safeParse({
       title: "Test",
-      description: {},
+      description: { type: "doc", content: [] },
       sourceUrl: "https://example.com",
     });
     expect(result.success).toBe(true);
@@ -94,7 +94,7 @@ describe("offerSchema validation", () => {
   it("rejects invalid URL for applicationUrl", () => {
     const result = offerSchema.safeParse({
       title: "Test",
-      description: {},
+      description: { type: "doc", content: [] },
       applicationUrl: "not-a-url",
     });
     expect(result.success).toBe(false);
@@ -103,7 +103,7 @@ describe("offerSchema validation", () => {
   it("accepts empty string for optional URL fields", () => {
     const result = offerSchema.safeParse({
       title: "Test",
-      description: {},
+      description: { type: "doc", content: [] },
       sourceUrl: "",
       applicationUrl: "",
     });
