@@ -1,10 +1,10 @@
 AI SOFTWARE ENGINEERING OS
 ======================================================================
 
-Version: 0.2
+Version: 0.3
 Status: CLOSED / PASS / CANONICAL
 Distribution: UNIVERSAL PORTABLE
-Frozen Rules: §24 CONTRACT PRESERVATION · §25 EXTERNAL PARAMETER GATE · §26 REMOTE RUNTIME COST & QUOTA SAFETY
+Frozen Rules: §24 CONTRACT PRESERVATION · §25 EXTERNAL PARAMETER GATE · §26 REMOTE RUNTIME COST & QUOTA SAFETY · §27 PRODUCT DELIVERY FIRST & COMPLEXITY BUDGET
 
 Operational implementation:
   S1 — AISE Universal Launcher → docs/engineering/AISE_UNIVERSAL_LAUNCHER.md
@@ -1476,5 +1476,181 @@ RETRY / LOOP SAFETY:
   polling frequency, scheduled checks, synthetic probes.
 
 ======================================================================
-END AI SOFTWARE ENGINEERING OS 0.1
+27. FROZEN PRODUCT DELIVERY FIRST & COMPLEXITY BUDGET
+======================================================================
+
+FROZEN — OWNER-approved universal invariant.
+
+This section establishes the primary AISE objective and a complexity
+budget for all engineering work.
+
+A. PRIMARY OBJECTIVE
+
+The primary AISE objective is:
+
+build a functional, correct, maintainable, tested application
+with the least unnecessary process and infrastructure complexity.
+
+PRODUCT DELIVERY FIRST.
+
+COMPLEXITY MUST BE JUSTIFIED BY A CURRENT VERIFIED NEED.
+
+B. MANDATORY DEVELOPMENT QUALITY
+
+Keep mandatory when applicable to the product:
+
+- clear requirements
+- simple architecture
+- readable code
+- explicit naming
+- TypeScript strictness (or equivalent)
+- separation of concerns
+- input validation where needed by the product
+- correct error handling
+- avoidance of duplication
+- avoidance of dead code
+- avoidance of unnecessary abstractions
+- secret files excluded from Git
+- passwords/tokens not hardcoded
+- authentication/authorization required by product functionality
+- useful unit/integration/E2E tests
+- lint
+- typecheck
+- tests
+- build
+- code review
+- regression verification before integration
+
+These directly support software correctness and maintainability.
+
+C. COMPLEXITY BUDGET
+
+Any new:
+
+  tool
+  service
+  framework
+  workflow
+  environment
+  security layer
+  infrastructure component
+  automation
+  governance step
+
+MUST answer:
+
+  WHAT CURRENT VERIFIED PROBLEM DOES THIS SOLVE?
+
+If no current verified problem exists:
+
+  DO NOT ADD IT.
+
+Future hypothetical scale is not sufficient justification.
+
+D. DEFAULT DEFERRED ITEMS
+
+The following are NOT mandatory during normal application development
+unless directly required by the product or a verified current problem:
+
+- advanced GitHub branch protection
+- complex CI/CD
+- multiple remote test environments
+- SAST/DAST platforms
+- enterprise secret-management systems
+- advanced observability
+- distributed tracing
+- load testing
+- synthetic monitoring
+- cron monitoring
+- infrastructure-as-code
+- complex rollback automation
+- Kubernetes
+- microservices
+- redundant infrastructure
+- enterprise compliance controls
+- sophisticated security hardening unrelated to current product behavior
+
+These may be proposed AFTER functional application completion as:
+
+  POST-DEVELOPMENT RECOMMENDATIONS
+
+They MUST NOT block application delivery by default.
+
+E. SECURITY PRINCIPLE
+
+Do NOT remove basic software security.
+
+Keep only security that is directly relevant to:
+
+- correct authentication
+- correct authorization
+- validation of user-controlled data
+- preventing obvious application vulnerabilities
+- protecting credentials/secrets from source control
+- safe database access
+- preventing accidental Production destruction
+
+Do NOT turn general infrastructure/security hardening into mandatory
+development phases.
+
+F. TEST PRINCIPLE
+
+Tests remain first-class engineering work.
+
+Do NOT classify useful tests as unnecessary complexity.
+
+Prefer:
+
+  tests close to development
+  local-first execution
+  fast feedback
+  deterministic behavior
+
+Remote CI execution is optional unless it provides clear current value.
+A locally verified test suite is valid engineering evidence.
+
+G. PROCESS SIMPLIFICATION
+
+Default implementation loop should be:
+
+  1. Understand
+  2. Design simply
+  3. Implement
+  4. Test
+  5. Review/refactor
+  6. Run quality gates
+  7. Integrate
+
+Do not add additional phases unless required by the actual work.
+
+S9/S10/S11 may remain as planning / implementation / verification
+boundaries, but S9 contracts should be proportionate to the task.
+
+Avoid 100+ acceptance criteria for ordinary application work unless
+genuinely necessary.
+
+H. POST-DEVELOPMENT REVIEW
+
+After the application is functionally complete, AISE may produce a
+separate:
+
+  POST-DEVELOPMENT IMPROVEMENT REPORT
+
+Possible topics:
+
+  - stronger CI/CD
+  - advanced security
+  - monitoring
+  - backups
+  - branch protection
+  - performance/load tests
+  - observability
+  - infrastructure automation
+  - disaster recovery
+
+These are recommendations, not retroactive blockers to application
+completion.
+
+======================================================================
+END AI SOFTWARE ENGINEERING OS 0.3
 ======================================================================

@@ -9,7 +9,7 @@ control plane) to understand where the project stands.
 
 PROJECT:                JOURDAIN EMPLOI
 AISE PHASE:             WP-005 / MS-005 CLOSED — ready for S9 WP-006 preparation (NOT YET AUTHORIZED)
-STATUS:                 MS-005 / WP-005 CLOSED / PASS. E2E Test Infrastructure delivered. S0 v0.2 active. Ready for WP-006 (Environments + CI/CD, MS-006) preparation — NOT YET AUTHORIZED
+STATUS:                 MS-005 / WP-005 CLOSED / PASS. E2E Test Infrastructure delivered. S0 v0.3 active (PRODUCT DELIVERY FIRST + COMPLEXITY BUDGET). Ready for WP-006 (Environments + CI/CD, MS-006) preparation — NOT YET AUTHORIZED
 CANONICAL RELEASE BRANCH: main
 CANONICAL DEVELOPMENT BRANCH: dev
 ACTIVE DEVELOPMENT BRANCH: dev
@@ -146,7 +146,7 @@ LOCAL = REMOTE:         YES (dev)
 MAIN HEAD:              0bc77a783c8efc1ba6056c67b5a5e290dd26ee4d (unchanged since branch cutover)
 WP-004 WORK BRANCH RETAINED: wp/004-public-job-portal (at a7b3833d6c1af4edb90cddd07c27964d5fcbf396) — NOT deleted
 WP-005 WORK BRANCH RETAINED: wp/005-e2e-test-infrastructure (at 29ce2d80a4ea7b728287040d8686958a60254697) — NOT deleted
-AISE S0 VERSION:               0.2
+AISE S0 VERSION:               0.3 (§27 PRODUCT DELIVERY FIRST & COMPLEXITY BUDGET added)
 AISE QUOTA-SAFETY PATCH:        ACCEPTED / MERGED
 AISE QUOTA-SAFETY PATCH COMMIT: f3f2bdcc233fe28cca01b18090aca0ee96561f61
 AISE QUOTA-SAFETY PATCH DATE:   2026-09-16
