@@ -26,7 +26,9 @@ Stateless gates only (no secrets, no database, no Vercel):
 |---|---|---|---|
 | `pnpm lint` | NO | NO | NO |
 | `pnpm typecheck` | NO | NO | NO |
-| `pnpm build` | NO | NO | NO |
+
+Build is excluded from GitHub CI because Next.js page-data collection
+requires DATABASE_URL at build time. Build remains a LOCAL AISE quality gate.
 
 **No GitHub Actions Secrets required.**
 **No GitHub Actions Variables required.**

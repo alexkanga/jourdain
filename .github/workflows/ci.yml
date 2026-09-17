@@ -1,11 +1,11 @@
 # CI Workflow — WP-006 Environments + CI/CD
 #
 # Per AISE S0 v0.3 §27 (PRODUCT DELIVERY FIRST & COMPLEXITY BUDGET):
-# GitHub CI is lightweight and STATELESS — lint + typecheck + build only.
-# These require ZERO secrets, ZERO database access, ZERO Vercel dependency.
+# GitHub CI is lightweight and STATELESS — lint + typecheck only.
+# These require ZERO secrets, ZERO variables, ZERO database access.
 #
-# Full application verification (Vitest 149 + Playwright 101) runs LOCALLY
-# as the AISE quality gate, not in GitHub Actions.
+# Build is excluded from GitHub CI because Next.js page-data collection
+# requires DATABASE_URL at build time. Build remains a LOCAL AISE quality gate.
 #
 # No GitHub Actions Secrets required.
 # No GitHub Actions Variables required.
@@ -57,18 +57,3 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
