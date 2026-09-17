@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "git": {
+    "deploymentEnabled": {
+      "dev": true,
+      "main": false,
+      "wp/*": false,
+      "wp/006-environments-cicd": false,
+      "**": false
+    }
+  },
+  "buildCommand": "pnpm build",
+  "installCommand": "pnpm install --frozen-lockfile"
+}

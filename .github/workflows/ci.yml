@@ -1,0 +1,161 @@
+# CI Workflow — WP-006 Environments + CI/CD
+#
+# Per WP-006 contract §5.2 + §5.3:
+# - ONE workflow, conditional jobs based on event type
+# - Triggers: pull_request to dev + push to dev + push to main + workflow_dispatch
+# - Permissions: contents: read only (minimal)
+# - Concurrency: TWO levels (non-mutating per-branch + stateful shared-TEST global mutex)
+# - No Vercel invocation (CI is independent of Vercel)
+# - No Production secrets
+# - 0 retries (no flake masking)
+#
+# PHASE A (repository implementation):
+# This workflow is created but NOT yet active until OWNER configures GitHub secrets/variables.
+# When secrets are missing, stateful jobs will fail gracefully (fail-closed).
+
+name: CI
+
+on:
+  pull_request:
+    branches: [dev]
+    types: [opened, synchronize, labeled]
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
+
+# Minimal permissions — read only, no write, no deployment token
+permissions:
+  contents: read
+
+# TWO concurrency levels:
+# A. Non-mutating jobs: per-branch, cancel-in-progress
+# B. Stateful shared-TEST jobs: global mutex, NO cancel-in-progress
+# The stateful jobs use a job-level concurrency override.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Non-secret CI variables (GitHub Actions Variables, not secrets)
+  E2E_EXPECTED_TEST_DATABASE_HOST: ${{ vars.E2E_EXPECTED_TEST_DATABASE_HOST }}
+  BETTER_AUTH_URL: ${{ vars.BETTER_AUTH_URL || 'http://127.0.0.1:3100' }}
+  INITIAL_ADMIN_LOGIN: ${{ vars.INITIAL_ADMIN_LOGIN || 'admin1' }}
+  INITIAL_ADMIN_EMAIL: ${{ vars.INITIAL_ADMIN_EMAIL || 'admin1@jourdain.local' }}
+  FANTOMAS_EMAIL: ${{ vars.FANTOMAS_EMAIL || 'fantomas@jourdain.local' }}
+
+jobs:
+  # ============================================================
+  # NON-MUTATING JOBS (pure: lint, typecheck, build)
+  # These use the workflow-level concurrency (cancel-in-progress: true)
+  # ============================================================
+
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+  # ============================================================
+  # STATEFUL SHARED-TEST JOBS (Vitest integration + Playwright E2E)
+  # These use a GLOBAL MUTEX: jourdain-shared-test-stateful
+  # At most ONE stateful job using shared Neon TEST at a time.
+  # cancel-in-progress: false (running test is NOT killed mid-mutation)
+  # ============================================================
+
+  vitest:
+    # Runs on: push to dev (canonical integration) + push to main
+    # Does NOT run on PR (avoids duplicate TEST DB mutation with push-to-dev)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: jourdain-shared-test-stateful
+      cancel-in-progress: false
+    env:
+      DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      INITIAL_ADMIN_PASSWORD: ${{ secrets.INITIAL_ADMIN_PASSWORD }}
+      FANTOMAS_INITIAL_PASSWORD: ${{ secrets.FANTOMAS_INITIAL_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Normal CI does NOT run db:migrate (WP-006 introduces no schema change)
+      - run: pnpm test
+
+  e2e:
+    # Runs on: push to dev (canonical integration, BLOCKING)
+    #          PR with run-e2e label (NON-BLOCKING, informational)
+    #          workflow_dispatch (manual trigger)
+    # Does NOT run on push to main (already verified on dev)
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/dev') ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-e2e'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: jourdain-shared-test-stateful
+      cancel-in-progress: false
+    env:
+      DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      INITIAL_ADMIN_PASSWORD: ${{ secrets.INITIAL_ADMIN_PASSWORD }}
+      FANTOMAS_INITIAL_PASSWORD: ${{ secrets.FANTOMAS_INITIAL_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
