@@ -2,21 +2,21 @@
 
 ## Architecture Overview
 
-Per AISE S0 v0.3 §27 (PRODUCT DELIVERY FIRST & COMPLEXITY BUDGET):
+One project, two deployment targets:
 
-- **GitHub** = repository + lightweight stateless CI (lint + typecheck + build)
+- **GitHub** = repository + lightweight stateless CI (lint + typecheck)
 - **AISE/local** = full application verification (Vitest 149 + Playwright 101)
-- **Vercel** = hosting (Preview for dev; Production deferred to S13)
+- **Vercel** = hosting (ONE project: dev → Preview, main → Production)
 - **Neon** = database (Production main branch; dev branch for Preview; test branch for local/CI)
 
 ## Branch-to-Deployment Mapping
 
-| Git Branch | Vercel `git.deploymentEnabled` | Deploys? | Purpose |
+| Git Branch | Vercel `git.deploymentEnabled` | Deploys? | Vercel Environment |
 |---|---|---|---|
-| `wp/*` | `false` | NO | Work branches — verified locally, not deployed |
-| `dev` | `true` | YES (Preview only) | Canonical integration — human review via Vercel Preview |
-| `main` (pre-S13) | `false` | NO | Release branch — Production deferred to OWNER PROD GO |
-| `main` (post-S13) | `true` (after S13) | YES (Production) | Production — OWNER PROD GO only |
+| `main` | `true` | YES | Production |
+| `dev` | `true` | YES | Preview |
+| `wp/*` | `false` | NO | — |
+| all other branches | `false` (catch-all `**`) | NO | — |
 
 ## GitHub CI
 
@@ -43,19 +43,19 @@ Full verification runs locally (mandatory before integration):
 | `pnpm lint` | — | NO | NO |
 | `pnpm typecheck` | — | NO | NO |
 | `pnpm test` (Vitest) | 149/149 | TEST_DATABASE_URL | NO |
-| `pnpm build` | — | NO | NO |
+| `pnpm build` | — | DATABASE_URL | NO |
 | `pnpm test:e2e` (Playwright) | 101/101 | TEST_DATABASE_URL + local Next.js | NO |
 
 ## Vercel Configuration
 
-`vercel.json` controls branch deployment eligibility via `git.deploymentEnabled`:
+`vercel.json` controls branch deployment eligibility:
 
 ```json
 {
   "git": {
     "deploymentEnabled": {
+      "main": true,
       "dev": true,
-      "main": false,
       "wp/*": false,
       "**": false
     }
@@ -64,38 +64,48 @@ Full verification runs locally (mandatory before integration):
 }
 ```
 
-- `dev` is the ONLY branch that triggers a Vercel Preview deployment.
-- `main` does NOT deploy until OWNER PROD GO (S13).
-- `wp/*` and all other branches do NOT deploy.
+- `main` → Vercel Production deployment.
+- `dev` → Vercel Preview deployment (for human review).
+- `wp/*` and all other branches → NO deployment.
 - Vercel build = `pnpm build` only (no migration, no bootstrap).
 
-## OWNER PROD GO Boundary
+## Vercel Environment Variables
 
-Production deployment requires explicit OWNER PROD GO (S13):
-- No automatic Production deployment
-- No Production DB mutation
-- No Production migration
-- No Production bootstrap
+Configured in Vercel dashboard (NOT in vercel.json):
+
+**Preview (dev):**
+- `DATABASE_URL` = DEV_DATABASE_URL (Neon dev branch)
+- `BETTER_AUTH_SECRET` = Preview-specific
+- `BETTER_AUTH_URL` = Preview origin (NOT localhost)
+- `NEXT_PUBLIC_SITE_URL` = Preview origin
+
+**Production (main):**
+- `DATABASE_URL` = PROD_DATABASE_URL (Neon main branch)
+- `BETTER_AUTH_SECRET` = Production strong secret
+- `BETTER_AUTH_URL` = Production origin
+- `NEXT_PUBLIC_SITE_URL` = Production origin
+
+Production secret values are set during Vercel project setup.
 
 ## Migration Workflow
 
 | Environment | How | Who | When |
 |---|---|---|---|
 | TEST | Local: `pnpm db:migrate` with DATABASE_URL=TEST_DATABASE_URL | Developer/Agent | Before local tests |
-| DEV | Manual: `pnpm db:migrate` with DATABASE_URL=DEV_DATABASE_URL | Operator | When needed |
-| PRODUCTION | Manual + OWNER PROD GO: `pnpm db:migrate` with DATABASE_URL=PROD_DATABASE_URL | Operator | S13 only |
+| DEV/Preview | Manual: `pnpm db:migrate` with DATABASE_URL=DEV_DATABASE_URL | Operator | When needed |
+| PRODUCTION | Manual + OWNER authorization: `pnpm db:migrate` with DATABASE_URL=PROD_DATABASE_URL | Operator | After Production deploy |
 
-**Vercel build does NOT execute migrations.**
+**Vercel build does NOT execute migrations.** Build = `pnpm build` only.
 
 ## Bootstrap Workflow
 
 | Environment | How | Who | When |
 |---|---|---|---|
 | TEST | Local E2E: `pnpm db:bootstrap` (idempotent) | E2E runner | Before Playwright |
-| DEV | Manual: `pnpm db:bootstrap` | Operator | When needed |
-| PRODUCTION | Manual + OWNER PROD GO | Operator | S13 only |
+| DEV/Preview | Manual: `pnpm db:bootstrap` | Operator | When needed |
+| PRODUCTION | Manual: `pnpm db:bootstrap` | Operator | After first Production deploy |
 
-**Vercel build does NOT execute bootstrap.**
+**Vercel build does NOT execute bootstrap.** Build = `pnpm build` only.
 
 ## Quota-Safety
 

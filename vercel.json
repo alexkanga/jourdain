@@ -3,10 +3,9 @@
   "framework": "nextjs",
   "git": {
     "deploymentEnabled": {
+      "main": true,
       "dev": true,
-      "main": false,
       "wp/*": false,
-      "wp/006-environments-cicd": false,
       "**": false
     }
   },

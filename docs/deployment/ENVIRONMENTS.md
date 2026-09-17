@@ -30,7 +30,7 @@
 
 **No secrets required.** **No variables required.**
 
-CI runs stateless gates only: lint, typecheck, build. These need no database, no secrets, no Vercel.
+CI runs stateless gates only: lint, typecheck. These need no database, no secrets, no Vercel. Build is excluded (requires DATABASE_URL at build time).
 
 ## Vercel Preview Environment Variables
 
@@ -43,9 +43,9 @@ Configured in Vercel dashboard (NOT in vercel.json):
 | `BETTER_AUTH_URL` | NON-SECRET (Preview origin, NOT localhost) |
 | `NEXT_PUBLIC_SITE_URL` | PUBLIC (Preview origin) |
 
-## Vercel Production Environment Variables (deferred to S13)
+## Vercel Production Environment Variables
 
-Configured in Vercel dashboard after OWNER PROD GO:
+Configured in Vercel dashboard during project setup:
 
 | Variable | Classification |
 |---|---|
@@ -54,7 +54,7 @@ Configured in Vercel dashboard after OWNER PROD GO:
 | `BETTER_AUTH_URL` | NON-SECRET (Production origin) |
 | `NEXT_PUBLIC_SITE_URL` | PUBLIC (Production origin) |
 
-**Production secret values deferred to S13 / OWNER PROD GO.**
+**Production secret values set during Vercel project setup.**
 
 ## Rules
 
