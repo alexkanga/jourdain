@@ -15,8 +15,13 @@ import { readFileSync } from "node:fs";
  *   - last SUPER_ADMIN delete/demote prevented
  *   - FANTOMAS user excluded from management (list, get, update, delete)
  *   - deleted user's session is invalidated (FK cascade)
- *   - password reset: old password fails, new password works
- *   - Better Auth hashPassword produces a hash that verifies on sign-in
+ *   - deleted user's account is removed (FK cascade)
+ *   - deleted user's session no longer authenticates
+ *
+ * Per user-management final correction #2: password reset is REMOVED from
+ * V1. There are no password-reset tests here — the edit flow does NOT
+ * touch the password. The create flow sets the initial credential via
+ * Better Auth's auth.api.createUser (which uses hashPassword internally).
  *
  * Uses real TEST_DATABASE_URL.
  */
@@ -472,8 +477,8 @@ describe("users service — deleteManagedUser", () => {
   });
 });
 
-describe("users service — deleted user session invalidation", () => {
-  it("deleting a user cascades to their session rows (FK CASCADE)", async () => {
+describe("users service — deleted user session/account cascade + invalidation", () => {
+  it("deleting a user cascades to their session AND account rows (FK CASCADE); old session no longer authenticates", async () => {
     const users = await importUsersService();
     const r = await users.createManagedUser({
       username: uniqueUsername("session_invalidation"),
@@ -502,103 +507,43 @@ describe("users service — deleted user session invalidation", () => {
     `) as Array<{ id: string }>;
     expect(sessionsBefore.length).toBe(1);
 
+    // Verify the account exists (created by createManagedUser via auth.api.createUser)
+    const accountsBefore = (await rawSql`
+      SELECT id FROM "account" WHERE user_id = ${userId}
+    `) as Array<{ id: string }>;
+    expect(accountsBefore.length).toBe(1);
+
     // Delete the user via the service
     const caller = { id: "test-caller-super-admin", username: "caller", principalType: "SUPER_ADMIN" as const };
     const delR = await users.deleteManagedUser(userId, caller);
     expect(delR.ok).toBe(true);
 
-    // Verify the session was cascade-deleted
+    // Verify the user row is gone
+    const userAfter = (await rawSql`
+      SELECT id FROM "user" WHERE id = ${userId}
+    `) as Array<{ id: string }>;
+    expect(userAfter.length).toBe(0);
+
+    // Verify the session was cascade-deleted (FK ON DELETE CASCADE)
     const sessionsAfter = (await rawSql`
       SELECT id FROM "session" WHERE user_id = ${userId}
     `) as Array<{ id: string }>;
     expect(sessionsAfter.length).toBe(0);
-  });
-});
 
-describe("users service — password reset via hashPassword", () => {
-  it("updateManagedUser with a non-blank password updates the account hash", async () => {
-    const users = await importUsersService();
-    const r = await users.createManagedUser({
-      username: uniqueUsername("pw_reset"),
-      email: uniqueEmail("pw_reset"),
-      password: "OldPassword123!",
-      role: "ADMIN",
-    });
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    createdUserIds.push(r.data.id);
+    // Verify the account was cascade-deleted (FK ON DELETE CASCADE)
+    const accountsAfter = (await rawSql`
+      SELECT id FROM "account" WHERE user_id = ${userId}
+    `) as Array<{ id: string }>;
+    expect(accountsAfter.length).toBe(0);
 
-    // Get the old hash from the account row
-    const oldHashRows = (await rawSql`
-      SELECT password FROM "account" WHERE user_id = ${r.data.id} LIMIT 1
-    `) as Array<{ password: string }>;
-    expect(oldHashRows.length).toBe(1);
-    const oldHash = oldHashRows[0].password;
-
-    // Reset the password
-    const updateR = await users.updateManagedUser(
-      {
-        id: r.data.id,
-        username: uniqueUsername("pw_reset"),
-        email: uniqueEmail("pw_reset"),
-        password: "NewPassword456!",
-        role: "ADMIN",
-      },
-      { id: "test-caller", username: "test", principalType: "SUPER_ADMIN" },
-    );
-    expect(updateR.ok).toBe(true);
-
-    // Get the new hash
-    const newHashRows = (await rawSql`
-      SELECT password FROM "account" WHERE user_id = ${r.data.id} LIMIT 1
-    `) as Array<{ password: string }>;
-    expect(newHashRows.length).toBe(1);
-    const newHash = newHashRows[0].password;
-    expect(newHash).not.toBe(oldHash);
-
-    // Verify the new hash verifies against the new password (and not the old)
-    // better-auth/crypto's verifyPassword takes { hash, password } object.
-    const { verifyPassword } = await import("better-auth/crypto");
-    const newVerifies = await verifyPassword({ hash: newHash, password: "NewPassword456!" });
-    expect(newVerifies).toBe(true);
-    const oldVerifies = await verifyPassword({ hash: newHash, password: "OldPassword123!" });
-    expect(oldVerifies).toBe(false);
-  });
-
-  it("updateManagedUser with a blank password leaves the account hash unchanged", async () => {
-    const users = await importUsersService();
-    const r = await users.createManagedUser({
-      username: uniqueUsername("pw_noop"),
-      email: uniqueEmail("pw_noop"),
-      password: "OriginalPassword123!",
-      role: "ADMIN",
-    });
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    createdUserIds.push(r.data.id);
-
-    const oldHashRows = (await rawSql`
-      SELECT password FROM "account" WHERE user_id = ${r.data.id} LIMIT 1
-    `) as Array<{ password: string }>;
-    const oldHash = oldHashRows[0].password;
-
-    // Update with blank password (should leave hash unchanged)
-    const updateR = await users.updateManagedUser(
-      {
-        id: r.data.id,
-        username: uniqueUsername("pw_noop"),
-        email: uniqueEmail("pw_noop"),
-        password: "",
-        role: "ADMIN",
-      },
-      { id: "test-caller", username: "test", principalType: "SUPER_ADMIN" },
-    );
-    expect(updateR.ok).toBe(true);
-
-    const newHashRows = (await rawSql`
-      SELECT password FROM "account" WHERE user_id = ${r.data.id} LIMIT 1
-    `) as Array<{ password: string }>;
-    expect(newHashRows[0].password).toBe(oldHash);
+    // Verify the old session token no longer authenticates — call
+    // auth.api.getSession with the deleted session's cookie. The session
+    // row is gone, so getSession must return null/empty.
+    const { auth } = await import("../lib/server/auth/auth");
+    const h = new Headers();
+    h.set("cookie", `better-auth.session_token=${token}`);
+    const session = await auth.api.getSession({ headers: h });
+    expect(session).toBeNull();
   });
 });
 
@@ -642,9 +587,25 @@ describe("users service — Zod validation rejects FANTOMAS role", () => {
       id: "test-id",
       username: "test",
       email: "test@example.com",
-      password: "",
       role: "FANTOMAS",
     });
     expect(r.success).toBe(false);
+  });
+
+  it("updateUserSchema accepts ADMIN/SUPER_ADMIN without password (V1: no password reset)", async () => {
+    const schemas = await importSchemas();
+    // Per user-management final correction #2: updateUserSchema does NOT
+    // include a password field. Password reset is removed from V1.
+    const r = schemas.updateUserSchema.safeParse({
+      id: "test-id",
+      username: "test",
+      email: "test@example.com",
+      role: "ADMIN",
+    });
+    expect(r.success).toBe(true);
+    // Verify the parsed data has NO password field (Zod strips it).
+    if (r.success) {
+      expect((r.data as Record<string, unknown>).password).toBeUndefined();
+    }
   });
 });

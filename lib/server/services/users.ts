@@ -2,29 +2,37 @@ import { db } from "@/db/index";
 import { users, accounts, sessions } from "@/db/schema";
 import { eq, ne, and } from "drizzle-orm";
 import { auth } from "@/lib/server/auth/auth";
-import { hashPassword } from "better-auth/crypto";
 import type { Principal } from "@/lib/server/auth/capabilities";
 
 /**
  * User-management service — internal CRUD for managed admin users.
  *
- * Per user-management work package:
+ * Per user-management work package + final corrections:
  *   - Only DB-backed ADMIN and SUPER_ADMIN users are "managed" by this module.
  *   - FANTOMAS is system-owned — never listed, never created, never updated,
  *     never deleted via this module.
- *   - Credential hashing uses Better Auth's `hashPassword` (the SAME scrypt
- *     implementation Better Auth uses internally). We import it from
- *     `better-auth/crypto` and apply it directly to the account row, because
- *     Better Auth's admin plugin endpoints (removeUser, setUserPassword,
- *     listUsers) require an HTTP session whose `role` is in `adminRoles` —
- *     and our users have `role="user"` (JOURDAIN's business authority is
- *     `principalType`, not Better Auth's `role`). Application-level
- *     authorization (can()/requireCapability() reading principalType) is
- *     the actual security authority for user:* capabilities.
- *   - New-user creation uses `auth.api.createUser` (server-side, no headers)
- *     which does NOT require a session — the admin plugin's createUser
- *     endpoint only checks `if (session)` and skips permission checks
- *     for server-side calls without headers/request.
+ *   - New-user creation uses Better Auth's `auth.api.createUser` (server-side,
+ *     no headers — bypasses the admin plugin's session check). Better Auth
+ *     handles the password hashing (scrypt) internally via its own
+ *     `hashPassword` — we NEVER construct password hashes manually.
+ *   - PASSWORD RESET REMOVED FROM V1 (per user-management final correction #2):
+ *     the updateManagedUser flow does NOT touch the password. Better Auth's
+ *     `setUserPassword` admin endpoint requires a session with role in
+ *     `adminRoles` — our users have `role="user"` (our authority is
+ *     `principalType`, not Better Auth role), so we cannot use that endpoint
+ *     cleanly. Direct `hashPassword` + `account.password` update was
+ *     rejected as inventing credential-hash manipulation outside the
+ *     supported Better Auth admin API. A future password-reset mechanism
+ *     may be designed separately if needed.
+ *   - User deletion uses direct DB delete. The schema's `session.userId`
+ *     and `account.userId` FKs have `onDelete: "cascade"` — Postgres
+ *     automatically deletes all the user's sessions and credential accounts
+ *     when the user row is deleted. Better Auth's `removeUser` admin endpoint
+ *     also requires an admin session (same reason as setUserPassword), so we
+ *     cannot use it cleanly. Direct DB delete with FK cascade achieves the
+ *     same result safely — verified by integration tests.
+ *   - Application-level authorization (can()/requireCapability() reading
+ *     principalType) is the actual security authority for user:* capabilities.
  *
  * Lockout protections (enforced here at the service layer, defense-in-depth
  * behind the Server Action capability check):
@@ -40,6 +48,8 @@ import type { Principal } from "@/lib/server/auth/capabilities";
  *     them. The next request with one of those (now-deleted) session
  *     tokens will fail `auth.api.getSession` → getPrincipal returns null
  *     → no more access. No separate session blacklist needed.
+ *     The same cascade applies to `account.userId` — credential accounts
+ *     are deleted with the user row.
  */
 
 export type ManagedUserRow = typeof users.$inferSelect;
@@ -191,20 +201,21 @@ export async function createManagedUser(input: {
 // ─── Update ──────────────────────────────────────────────────────────
 
 /**
- * Update an existing managed user's username, email, role, and optionally
- * password.
+ * Update an existing managed user's username, email, and role
+ * (ADMIN ↔ SUPER_ADMIN).
+ *
+ * Per user-management final correction #2: NO password update. The edit
+ * flow does NOT touch the password. Better Auth's `setUserPassword` admin
+ * endpoint requires a session with role in adminRoles — our users have
+ * role='user' (our authority is principalType, not Better Auth role), so
+ * we cannot use that endpoint cleanly. Direct hashPassword +
+ * account.password update was rejected as inventing credential-hash
+ * manipulation. A future password-reset mechanism may be designed
+ * separately if needed.
  *
  * - Username/email/role updates: direct DB update (Better Auth's additional
  *   fields are server-managed; username is normalized to lowercase by the
  *   Username plugin and has a unique constraint enforced by the DB).
- * - Password update (when non-empty): hash via Better Auth's `hashPassword`
- *   (the SAME scrypt implementation Better Auth uses internally) and
- *   update the account row's password field directly. We use direct DB
- *   access here because Better Auth's `setUserPassword` admin endpoint
- *   requires a session with role in adminRoles, which our users don't have.
- *   Using `hashPassword` directly produces a hash byte-identical to what
- *   `setUserPassword` would produce — the verification path on sign-in is
- *   unchanged.
  *
  * Lockout protections enforced:
  *   - LAST_SUPER_ADMIN: if the update would demote the only remaining
@@ -226,7 +237,6 @@ export async function updateManagedUser(
     id: string;
     username: string;
     email: string;
-    password?: string;
     role: "ADMIN" | "SUPER_ADMIN";
   },
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -262,7 +272,8 @@ export async function updateManagedUser(
 
     // Update username/email/role via direct DB write. Better Auth's
     // additional fields are managed by us server-side; the username field
-    // has a unique constraint enforced by the DB.
+    // has a unique constraint enforced by the DB. Password is NOT updated
+    // here — password reset is removed from V1.
     const normalizedUsername = input.username.toLowerCase();
     try {
       await db
@@ -283,17 +294,6 @@ export async function updateManagedUser(
         return { ok: false, error: "Cet email est déjà utilisé" };
       }
       throw e;
-    }
-
-    // Optional password reset. Hash via Better Auth's hashPassword (scrypt)
-    // and update the account row directly. Same hash Better Auth uses on
-    // sign-in verification.
-    if (input.password && input.password.length > 0) {
-      const hashed = await hashPassword(input.password);
-      await db
-        .update(accounts)
-        .set({ password: hashed, updatedAt: new Date() })
-        .where(eq(accounts.userId, input.id));
     }
 
     return { ok: true, data: { id: input.id } };

@@ -4,15 +4,19 @@ import { can, type Principal, type Capability } from "../lib/server/auth/capabil
 /**
  * can() — business authorization capability matrix.
  *
- * Per user-management work package, the hierarchy is:
+ * Per user-management work package + final corrections, the hierarchy is:
  *   ADMIN        → baseline offer management (no offer:restore, no user:*)
  *   SUPER_ADMIN   → inherits all ADMIN + offer:restore + user:* management
  *   FANTOMAS      → inherits all SUPER_ADMIN + system:bootstrap, system:recovery
  *
  * ADMIN does NOT have:
  *   - offer:restore (moved to SUPER_ADMIN)
- *   - user:list, user:create, user:update, user:delete, user:password-reset
+ *   - user:list, user:create, user:update, user:delete
  *   - system:bootstrap, system:recovery
+ *
+ * Per user-management final correction #2: user:password-reset is REMOVED
+ * from V1 — it is NOT a capability in the matrix at all. A future
+ * password-reset mechanism may be designed separately if needed.
  *
  * SUPER_ADMIN does NOT have:
  *   - system:bootstrap, system:recovery (Fantomas-only)
@@ -66,9 +70,11 @@ describe("can() — business authorization capability matrix", () => {
   // ─── ADMIN has no user-management capabilities ─────────────────────
 
   it("DENIES ADMIN all user:* capabilities", () => {
+    // Per user-management final correction #2: user:password-reset is
+    // REMOVED from V1. The remaining user:* capabilities are list/create/
+    // update/delete — ADMIN has none of them.
     const userCaps: Capability[] = [
       "user:list", "user:create", "user:update", "user:delete",
-      "user:password-reset",
     ];
     for (const cap of userCaps) {
       expect(can(admin, cap)).toBe(false);
@@ -108,10 +114,11 @@ describe("can() — business authorization capability matrix", () => {
     expect(can(superAdmin, "offer:restore")).toBe(true);
   });
 
-  it("allows SUPER_ADMIN all user:* capabilities", () => {
+  it("allows SUPER_ADMIN all user:* capabilities (no password-reset in V1)", () => {
+    // Per user-management final correction #2: user:password-reset is
+    // REMOVED from V1. SUPER_ADMIN has list/create/update/delete only.
     const userCaps: Capability[] = [
       "user:list", "user:create", "user:update", "user:delete",
-      "user:password-reset",
     ];
     for (const cap of userCaps) {
       expect(can(superAdmin, cap)).toBe(true);
@@ -143,10 +150,11 @@ describe("can() — business authorization capability matrix", () => {
     expect(can(fantomas, "offer:restore")).toBe(true);
   });
 
-  it("allows FANTOMAS all user:* capabilities", () => {
+  it("allows FANTOMAS all user:* capabilities (no password-reset in V1)", () => {
+    // Per user-management final correction #2: user:password-reset is
+    // REMOVED from V1. FANTOMAS inherits list/create/update/delete only.
     const userCaps: Capability[] = [
       "user:list", "user:create", "user:update", "user:delete",
-      "user:password-reset",
     ];
     for (const cap of userCaps) {
       expect(can(fantomas, cap)).toBe(true);

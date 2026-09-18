@@ -10,8 +10,19 @@ import { z } from "zod";
  *   - Username normalization is delegated to Better Auth's Username plugin
  *     (lowercase) at creation time; we still validate the input shape here.
  *
- * The schemas are used at the Server Action layer as the authoritative
- * input validator (UI hiding is UX only).
+ * ─── PASSWORD RESET REMOVED FROM V1 ─────────────────────────────────
+ * Per user-management final correction #2: the edit-user flow does NOT
+ * include a password field. Better Auth's setUserPassword admin endpoint
+ * requires an admin session with role in adminRoles — our users have
+ * role='user' (our authority is principalType, not Better Auth role), so
+ * we cannot use that endpoint cleanly. Direct hashPassword + account.password
+ * update was rejected as inventing credential-hash manipulation.
+ *
+ * The CREATE flow still requires a password (initial credential) — this is
+ * handled by Better Auth's auth.api.createUser (server-side, no session
+ * required) which uses Better Auth's own hashPassword internally.
+ *
+ * A future password-reset mechanism may be designed separately if needed.
  */
 
 // Allowed assignable roles from the UI. NEVER include "FANTOMAS" here —
@@ -37,21 +48,15 @@ export const emailField = z
   .trim()
   .toLowerCase();
 
-// Password (create): required, minimum length 8 (Better Auth default).
+// Password (create only): required, minimum length 8 (Better Auth default).
 // No complexity rules — the user-management work package did not specify any.
 // The Bootstrap admin1/Fantomas passwords are governed by their own env vars.
+// NOTE: There is NO password-edit field — password reset is removed from V1
+// (per user-management final correction #2). The create flow sets the initial
+// credential; the edit flow does NOT touch the password.
 export const passwordCreateField = z
   .string()
   .min(8, "Le mot de passe doit contenir au moins 8 caractères");
-
-// Password (edit): optional. When blank, password is unchanged. When
-// non-blank, must meet the create-password minimum length.
-export const passwordEditField = z
-  .string()
-  .refine(
-    (v) => v === "" || v.length >= 8,
-    "Le mot de passe doit contenir au moins 8 caractères (ou rester vide pour ne pas modifier)",
-  );
 
 // Role: must be one of ASSIGNABLE_ROLES. Zod enum rejects "FANTOMAS" and any
 // other arbitrary value.
@@ -69,12 +74,13 @@ export const createUserSchema = z.object({
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 
-// Update user schema. Password is optional (blank = unchanged).
+// Update user schema. Per user-management final correction #2: NO password
+// field. Edit-user updates username, email, and role (ADMIN ↔ SUPER_ADMIN)
+// only. Password reset is removed from V1.
 export const updateUserSchema = z.object({
   id: z.string().min(1, "L'identifiant est requis"),
   username: usernameField,
   email: emailField,
-  password: passwordEditField.optional().or(z.literal("")),
   role: roleField,
 });
 

@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { neon } from "@neondatabase/serverless";
 import { readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 
 /**
  * Regression tests for getPrincipal() — the WP-002 defect where
@@ -10,11 +11,21 @@ import { readFileSync } from "node:fs";
  * Per owner authorization §6:
  *   A. no request/session: getPrincipal() → null
  *   B. valid Better Auth session headers: getPrincipal() → principal
- *   C. ADMIN session: principalType = ADMIN
+ *   C. ADMIN session: principalType = ADMIN (via a dedicated temporary ADMIN fixture)
  *   D. FANTOMAS session: principalType = FANTOMAS
  *   E. protected server-side access with authenticated session: accepted
  *   F. protected server-side access without authenticated session: rejected
  *   G. business authorization depends on principalType, not role
+ *
+ * ─── ADMIN1 IS STRICTLY SUPER_ADMIN ─────────────────────────────────
+ * Per user-management final correction #1: admin1 is canonically a
+ * SUPER_ADMIN — NOT ADMIN. The earlier "accept ADMIN or SUPER_ADMIN"
+ * contract weakened the regression. This file now expects admin1 to be
+ * SUPER_ADMIN exactly.
+ *
+ * For tests that need an ordinary ADMIN (principalType = ADMIN), a
+ * dedicated temporary ADMIN fixture is created in beforeAll and cleaned
+ * up in afterAll. We do NOT use admin1 as both ADMIN and SUPER_ADMIN.
  *
  * Uses real TEST_DATABASE_URL (no DB mocks per ADR-0008).
  *
@@ -87,6 +98,18 @@ let auth: AuthModule["auth"];
 let getPrincipal: AuthzModule["getPrincipal"];
 let can: AuthzModule["can"];
 
+// ─── Dedicated ordinary-ADMIN fixture ───────────────────────────────
+// Per user-management final correction #1: admin1 is canonically a
+// SUPER_ADMIN. We do NOT use admin1 to test the "ADMIN session" path.
+// Instead, we create a temporary ordinary-ADMIN user (principalType=ADMIN)
+// via direct DB insert in beforeAll, use it for the ADMIN tests, and
+// delete it in afterAll. The fixture uses Better Auth's hashPassword
+// for the credential (same scrypt hashing as a normal sign-up).
+const ADMIN_FIXTURE_USERNAME = "um_authreg_admin";
+const ADMIN_FIXTURE_EMAIL = "um_authreg_admin@um-test.local";
+const ADMIN_FIXTURE_PASSWORD = "AuthRegAdminPass123!";
+let adminFixtureId: string | null = null;
+
 beforeAll(async () => {
   // Verify test target reachable
   const r = await rawSql`SELECT 1 AS one`;
@@ -100,6 +123,36 @@ beforeAll(async () => {
   auth = authMod.auth;
   getPrincipal = authzMod.getPrincipal;
   can = authzMod.can;
+
+  // Create the dedicated ordinary-ADMIN fixture via direct DB insert.
+  // We use Better Auth's hashPassword for the credential (same scrypt
+  // hashing as a normal sign-up), so the fixture can sign in via the
+  // real Better Auth sign-in/username endpoint.
+  const { hashPassword } = await import("better-auth/crypto");
+  const hashedPassword = await hashPassword(ADMIN_FIXTURE_PASSWORD);
+  adminFixtureId = randomUUID();
+  const now = new Date().toISOString();
+  await rawSql`
+    INSERT INTO "user" (id, email, email_verified, name, username, display_username, role, banned, principal_type, created_at, updated_at)
+    VALUES (${adminFixtureId}, ${ADMIN_FIXTURE_EMAIL}, true, ${ADMIN_FIXTURE_USERNAME}, ${ADMIN_FIXTURE_USERNAME}, ${ADMIN_FIXTURE_USERNAME}, 'user', false, 'ADMIN', ${now}, ${now})
+  `;
+  const accountId = randomUUID();
+  await rawSql`
+    INSERT INTO "account" (id, user_id, account_id, provider_id, password, created_at, updated_at)
+    VALUES (${accountId}, ${adminFixtureId}, ${adminFixtureId}, 'credential', ${hashedPassword}, ${now}, ${now})
+  `;
+});
+
+afterAll(async () => {
+  // Cleanup the dedicated ordinary-ADMIN fixture (cascade will clean up
+  // any sessions/accounts).
+  if (adminFixtureId) {
+    try {
+      await rawSql`DELETE FROM "user" WHERE id = ${adminFixtureId}`;
+    } catch {
+      // ignore — best-effort cleanup
+    }
+  }
 });
 
 // Clear rate limit table before each test to avoid cross-test rate limiting.
@@ -147,7 +200,7 @@ describe("getPrincipal() — auth integration regression (real TEST_DATABASE_URL
     expect(principal).toBeNull();
   });
 
-  it("B. valid Better Auth session headers: getPrincipal() → principal", async () => {
+  it("B. valid Better Auth session headers: getPrincipal() → principal (admin1 = SUPER_ADMIN)", async () => {
     const cookie = await signInAndGetSignedCookie(
       (env.INITIAL_ADMIN_LOGIN || "admin1").toLowerCase(),
       env.INITIAL_ADMIN_PASSWORD!,
@@ -158,22 +211,25 @@ describe("getPrincipal() — auth integration regression (real TEST_DATABASE_URL
     expect(principal).not.toBeNull();
     expect(principal!.id).toBeTruthy();
     expect(principal!.username).toBeTruthy();
+    // admin1 is canonically a SUPER_ADMIN per user-management final correction #1.
+    expect(principal!.principalType).toBe("SUPER_ADMIN");
   });
 
-  it("C. ADMIN session: principalType is a DB-backed admin role (ADMIN or SUPER_ADMIN)", async () => {
+  it("C. ADMIN session (dedicated fixture): principalType = ADMIN (NOT admin1)", async () => {
     await sleep(1000); // avoid rate limit
+    // Sign in as the dedicated ordinary-ADMIN fixture — NOT admin1.
+    // admin1 is canonically a SUPER_ADMIN; we use a separate fixture to
+    // test the ADMIN role cleanly without weakening the admin1 contract.
     const cookie = await signInAndGetSignedCookie(
-      (env.INITIAL_ADMIN_LOGIN || "admin1").toLowerCase(),
-      env.INITIAL_ADMIN_PASSWORD!,
+      ADMIN_FIXTURE_USERNAME,
+      ADMIN_FIXTURE_PASSWORD,
     );
     const h = new Headers();
     h.set("cookie", cookie);
     const principal = await getPrincipal(h);
     expect(principal).not.toBeNull();
-    // Per user-management work package: the bootstrap-created initial admin
-    // (admin1 by default) is now a SUPER_ADMIN, not an ADMIN. Accept either
-    // DB-backed admin role here — the exact role depends on bootstrap state.
-    expect(["ADMIN", "SUPER_ADMIN"]).toContain(principal!.principalType);
+    expect(principal!.principalType).toBe("ADMIN");
+    expect(principal!.username).toBe(ADMIN_FIXTURE_USERNAME);
   });
 
   it("D. FANTOMAS session: principalType = FANTOMAS (mixed-case 'Fantomas' input)", async () => {
@@ -193,6 +249,7 @@ describe("getPrincipal() — auth integration regression (real TEST_DATABASE_URL
 
   it("E. protected server-side access with authenticated session: accepted (can() returns true)", async () => {
     await sleep(1000); // avoid rate limit
+    // admin1 is a SUPER_ADMIN — has all ADMIN capabilities + offer:restore + user:*.
     const cookie = await signInAndGetSignedCookie(
       (env.INITIAL_ADMIN_LOGIN || "admin1").toLowerCase(),
       env.INITIAL_ADMIN_PASSWORD!,
@@ -201,9 +258,12 @@ describe("getPrincipal() — auth integration regression (real TEST_DATABASE_URL
     h.set("cookie", cookie);
     const principal = await getPrincipal(h);
     expect(principal).not.toBeNull();
-    // ADMIN can perform offer:create
+    // SUPER_ADMIN inherits all ADMIN capabilities — offer:create + offer:publish
     expect(can(principal!, "offer:create")).toBe(true);
     expect(can(principal!, "offer:publish")).toBe(true);
+    // SUPER_ADMIN also has offer:restore + user:* — ADMIN does NOT.
+    expect(can(principal!, "offer:restore")).toBe(true);
+    expect(can(principal!, "user:list")).toBe(true);
   });
 
   it("F. protected server-side access without authenticated session: rejected (getPrincipal → null)", async () => {
@@ -217,6 +277,7 @@ describe("getPrincipal() — auth integration regression (real TEST_DATABASE_URL
 
   it("G. business authorization depends on principalType, NOT Better Auth role", async () => {
     await sleep(500);
+    // admin1 is canonically a SUPER_ADMIN.
     const adminCookie = await signInAndGetSignedCookie(
       (env.INITIAL_ADMIN_LOGIN || "admin1").toLowerCase(),
       env.INITIAL_ADMIN_PASSWORD!,
@@ -238,26 +299,25 @@ describe("getPrincipal() — auth integration regression (real TEST_DATABASE_URL
     expect(adminPrincipal).not.toBeNull();
     expect(fantomasPrincipal).not.toBeNull();
 
-    // ADMIN: offer:create ALLOW, system:bootstrap DENY
+    // admin1 is a SUPER_ADMIN (NOT a baseline ADMIN).
+    // SUPER_ADMIN inherits all ADMIN capabilities + offer:restore + user:*.
+    // SUPER_ADMIN does NOT have Fantomas-only capabilities.
+    expect(adminPrincipal!.principalType).toBe("SUPER_ADMIN");
     expect(can(adminPrincipal!, "offer:create")).toBe(true);
+    expect(can(adminPrincipal!, "offer:restore")).toBe(true);
+    expect(can(adminPrincipal!, "user:list")).toBe(true);
     expect(can(adminPrincipal!, "system:bootstrap")).toBe(false);
 
-    // FANTOMAS: offer:create ALLOW (inherits ADMIN), system:bootstrap ALLOW
+    // FANTOMAS inherits all SUPER_ADMIN capabilities + system:*.
+    expect(fantomasPrincipal!.principalType).toBe("FANTOMAS");
     expect(can(fantomasPrincipal!, "offer:create")).toBe(true);
+    expect(can(fantomasPrincipal!, "offer:restore")).toBe(true);
+    expect(can(fantomasPrincipal!, "user:list")).toBe(true);
     expect(can(fantomasPrincipal!, "system:bootstrap")).toBe(true);
 
-    // Per user-management work package: admin1 is now a SUPER_ADMIN (not
-    // ADMIN). SUPER_ADMIN inherits all ADMIN capabilities + offer:restore +
-    // user:*. The Better Auth role field is "user" for both ADMIN and
-    // SUPER_ADMIN — our business authorization is on principalType, not role.
-    // The bootstrap admin can be either ADMIN or SUPER_ADMIN depending on
-    // whether the bootstrap upgrade has been applied; accept either here.
-    expect(["ADMIN", "SUPER_ADMIN", "FANTOMAS"]).toContain(adminPrincipal!.principalType);
-    expect(["ADMIN", "SUPER_ADMIN", "FANTOMAS"]).toContain(fantomasPrincipal!.principalType);
     // The bootstrap admin is NOT FANTOMAS (Fantomas is a separate break-glass
     // identity); the FANTOMAS session is the break-glass path.
     expect(adminPrincipal!.principalType).not.toBe("FANTOMAS");
-    expect(fantomasPrincipal!.principalType).toBe("FANTOMAS");
   }, 30000);
 
   it("invalid session cookie: getPrincipal() → null", async () => {

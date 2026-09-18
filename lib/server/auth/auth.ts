@@ -27,14 +27,30 @@ export const auth = betterAuth({
       // Better Auth admin endpoints (createUser, listUsers, setRole,
       // removeUser, setUserPassword) require an HTTP-request caller with a
       // session whose `role` is in `adminRoles`. Server-side API calls
-      // (auth.api.* without headers) bypass this check — the admin plugin
-      // only enforces when there's a request+session. Our user-management
-      // Server Actions use auth.api.* server-side; our application-level
-      // authorization (can()/requireCapability() reading principalType)
-      // is the actual security authority for user:* capabilities.
+      // (auth.api.* without headers) bypass this check for createUser —
+      // the admin plugin's createUser endpoint only checks `if (session)`
+      // and skips permission checks for server-side calls. The other
+      // endpoints (listUsers, setRole, removeUser, setUserPassword) use
+      // `adminMiddleware` which always requires a session — so we cannot
+      // use them server-side without granting a Better Auth "admin" role.
+      //
+      // Per user-management final correction #2, we do NOT use
+      // setUserPassword (it would require inventing direct credential-hash
+      // manipulation as a workaround, which violates the minimal-design
+      // rule). Password reset is REMOVED from V1.
+      //
+      // User deletion uses direct DB delete with FK cascade (verified by
+      // integration tests) — the schema's session.userId and account.userId
+      // FKs have onDelete: cascade, so deleting the user row automatically
+      // removes their sessions and credential accounts. The next request
+      // with a deleted session token fails getSession → no access.
+      //
       // adminRoles stays at the default ["admin"] — we don't grant any
       // JOURDAIN user the Better Auth "admin" role; we use our own
       // principalType hierarchy (ADMIN / SUPER_ADMIN / FANTOMAS).
+      // Application-level authorization (can()/requireCapability() reading
+      // principalType) is the actual security authority for user:*
+      // capabilities.
     }),
   ],
   user: {

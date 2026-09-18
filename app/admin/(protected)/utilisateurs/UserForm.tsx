@@ -8,19 +8,24 @@ import type { ManagedUserRow } from "@/lib/server/services/users";
 /**
  * UserForm — create or edit a managed admin user.
  *
- * Per user-management work package:
+ * Per user-management work package + final correction #2:
  *   - Role options are ADMIN and SUPER_ADMIN ONLY. FANTOMAS is never
  *     accepted as form input (the server-side Zod schema enforces this —
  *     the client dropdown is just UX, not security).
  *   - Password field:
- *       - Create mode: required (min 8 chars).
- *       - Edit mode: optional — blank means "unchanged".
+ *       - Create mode: required (min 8 chars) — initial credential.
+ *       - Edit mode: NO password field. Password reset is REMOVED from V1
+ *         (Better Auth setUserPassword requires admin-session semantics
+ *         that don't map cleanly to our independent principal model;
+ *         direct hashPassword + account.password update was rejected as
+ *         inventing credential-hash manipulation). Edit-user updates
+ *         username, email, and role only.
  *   - On success, navigate to /admin/utilisateurs (list).
  *   - On error, display the controlled error message above the form.
  *
  * The form uses FormData + Server Actions — no client-side credential
- * processing. The credential check (create) / password hash (edit reset)
- * happens server-side via Better Auth's hashPassword.
+ * processing. The initial password (create) is hashed server-side by
+ * Better Auth's auth.api.createUser (which uses hashPassword internally).
  */
 
 const ROLE_OPTIONS = [
@@ -121,29 +126,32 @@ export function UserForm({
             />
           </div>
 
-          {/* Mot de passe */}
-          <div>
-            <label
-              htmlFor="password"
-              className="mb-1 block text-sm font-medium text-gray-700"
-            >
-              {isCreate ? "Mot de passe initial" : "Nouveau mot de passe"}
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              required={isCreate}
-              minLength={isCreate ? 8 : undefined}
-              placeholder={isCreate ? undefined : "(inchangé si vide)"}
-              className="block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              {isCreate
-                ? "Au moins 8 caractères"
-                : "Laisser vide pour ne pas modifier le mot de passe"}
-            </p>
-          </div>
+          {/* Mot de passe — CREATE MODE ONLY.
+              Per user-management final correction #2: password reset is
+              REMOVED from V1. The edit-user flow does NOT include a password
+              field. The create flow requires the initial credential, which
+              is hashed server-side by Better Auth's auth.api.createUser. */}
+          {isCreate && (
+            <div>
+              <label
+                htmlFor="password"
+                className="mb-1 block text-sm font-medium text-gray-700"
+              >
+                Mot de passe initial
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                minLength={8}
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Au moins 8 caractères
+              </p>
+            </div>
+          )}
 
           {/* Rôle */}
           <div>

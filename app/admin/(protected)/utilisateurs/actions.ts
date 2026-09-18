@@ -100,11 +100,13 @@ export async function updateUserAction(
   } catch {
     return { ok: false, error: "Action non autorisée" };
   }
+  // Per user-management final correction #2: password reset is REMOVED
+  // from V1. The edit flow does NOT include a password field — only
+  // username, email, and role.
   const raw = {
     id: String(formData.get("id") ?? ""),
     username: String(formData.get("username") ?? ""),
     email: String(formData.get("email") ?? ""),
-    password: String(formData.get("password") ?? ""),
     role: String(formData.get("role") ?? ""),
   };
   const parsed = updateUserSchema.safeParse(raw);

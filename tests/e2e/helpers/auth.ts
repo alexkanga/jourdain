@@ -58,9 +58,9 @@ export async function verifyTestIdentity(
       "E2E_TEST_IDENTITY_PREPARATION_GAP: admin1 missing in TEST after bootstrap. The existing canonical bootstrap cannot safely prepare required identities.",
     );
   }
-  if (adminRows[0].principal_type !== "ADMIN" && adminRows[0].principal_type !== "SUPER_ADMIN") {
+  if (adminRows[0].principal_type !== "SUPER_ADMIN") {
     throw new Error(
-      `E2E_TEST_IDENTITY_PREPARATION_GAP: admin1 principal_type is "${adminRows[0].principal_type}" (expected "ADMIN" or "SUPER_ADMIN"). Per user-management work package, admin1 is now a SUPER_ADMIN.`,
+      `E2E_TEST_IDENTITY_PREPARATION_GAP: admin1 principal_type is "${adminRows[0].principal_type}" (expected "SUPER_ADMIN"). Per user-management final correction #1, admin1 is canonically a SUPER_ADMIN — the bootstrap must have promoted it. Re-run pnpm db:bootstrap against TEST.`,
     );
   }
   const fantomasRows = await rawSql`

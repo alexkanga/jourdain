@@ -10,12 +10,17 @@ export type Capability =
   | "offer:archive"
   // Offer restore — moved from ADMIN to SUPER_ADMIN (intentional business-rule change)
   | "offer:restore"
-  // User management — SUPER_ADMIN and FANTOMAS only
+  // User management — SUPER_ADMIN and FANTOMAS only.
+  // Note: user:password-reset was REMOVED from V1 per user-management final
+  // correction #2 (Better Auth setUserPassword requires admin-session
+  // semantics that don't map cleanly to our independent principal model;
+  // direct hashPassword + account.password update violated the minimal-design
+  // rule against inventing credential-hash manipulation. A future
+  // password-reset mechanism may be designed separately if needed.)
   | "user:list"
   | "user:create"
   | "user:update"
   | "user:delete"
-  | "user:password-reset"
   // Login (any admin principal)
   | "admin:login"
   // Fantomas-only system capabilities
@@ -54,13 +59,15 @@ const ADMIN_CAPABILITIES: Capability[] = [
 // SUPER_ADMIN_EXTRA_CAPABILITIES: capabilities granted to SUPER_ADMIN
 // beyond the ADMIN baseline. SUPER_ADMIN inherits all ADMIN_CAPABILITIES
 // plus these.
+// NOTE: user:password-reset was REMOVED from V1 (per user-management final
+// correction #2). A future password-reset mechanism may be designed
+// separately if needed.
 const SUPER_ADMIN_EXTRA_CAPABILITIES: Capability[] = [
   "offer:restore",
   "user:list",
   "user:create",
   "user:update",
   "user:delete",
-  "user:password-reset",
 ];
 
 // FANTOMAS_EXTRA_CAPABILITIES: capabilities granted to FANTOMAS beyond the
