@@ -42,7 +42,27 @@ export const auth = betterAuth({
     storage: "database", // Database-backed on Neon — NOT memory fallback
   },
   secret: process.env.BETTER_AUTH_SECRET,
-  baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
+  baseURL: {
+    allowedHosts: [
+      "localhost",
+      "localhost:*",
+      "127.0.0.1",
+      "127.0.0.1:*",
+      "jourdain-three.vercel.app",
+      "jourdain-*.vercel.app",
+    ],
+    fallback: process.env.BETTER_AUTH_URL || "http://localhost:3000",
+    protocol: "auto",
+  },
+  advanced: {
+    // The __Secure- cookie prefix requires HTTPS. With protocol:"auto" and
+    // NODE_ENV=production, Better Auth defaults to __Secure- which breaks
+    // HTTP local dev / E2E. When an explicitly configured BETTER_AUTH_URL
+    // begins with http://, we know we're on HTTP → useSecureCookies = false.
+    // Otherwise (Vercel HTTPS, no BETTER_AUTH_URL, or https:// URL), preserve
+    // Better Auth's normal/default secure-cookie behavior.
+    useSecureCookies: process.env.BETTER_AUTH_URL?.startsWith("http://") ? false : undefined,
+  },
 });
 
 export type Auth = typeof auth;
