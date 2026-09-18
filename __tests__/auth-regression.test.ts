@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { neon } from "@neondatabase/serverless";
 import { readFileSync } from "node:fs";
-import { auth } from "@/lib/server/auth/auth";
-import { getPrincipal, can } from "@/lib/server/auth/authorization";
 
 /**
  * Regression tests for getPrincipal() — the WP-002 defect where
@@ -29,6 +27,26 @@ import { getPrincipal, can } from "@/lib/server/auth/authorization";
  * Next.js request context (e.g., in vitest). Tests A and F verify the
  * "no session" path by passing empty Headers explicitly (bypassing
  * nextHeaders). Tests B-G pass explicit headers with the signed cookie.
+ *
+ * ─── TEST-HARNESS ENV-IMPORT-ORDER FIX ─────────────────────────────
+ * The auth + db module chain (lib/server/auth/auth.ts → drizzleAdapter(db) →
+ * db/index.ts Proxy → neon(process.env.DATABASE_URL)) initializes at
+ * module-load time when `auth` is imported. If `auth` is imported as a
+ * top-level static import, the chain runs BEFORE this test file's body
+ * sets `process.env.DATABASE_URL = TEST_URL`, causing `neon()` to receive
+ * an empty string and throw "Database connection string format for
+ * `neon()` should be: postgresql://...".
+ *
+ * Fix (TEST HARNESS ONLY — no application runtime change):
+ *   1. Establish `process.env.DATABASE_URL = TEST_URL` at the top of the
+ *      test file, BEFORE any import that pulls in the auth/db chain.
+ *   2. Use dynamic `await import(...)` inside `beforeAll` to load
+ *      `auth`, `getPrincipal`, and `can` AFTER the env var is set.
+ *   3. Store the dynamically-imported bindings in module-scoped
+ *      variables and reference them from each test.
+ * This mirrors the proven pattern in __tests__/offers-integration.test.ts
+ * (importOffersService) and __tests__/public-offers-integration.test.ts
+ * (importPublicOffers) — same env-first-then-import discipline.
  */
 
 function parseEnvLocal(): Record<string, string> {
@@ -50,15 +68,38 @@ if (!TEST_URL) {
   throw new Error("TEST_DATABASE_URL must be set for auth integration tests");
 }
 
-// Force DATABASE_URL to TEST for the auth + db layers
+// CRITICAL: establish DATABASE_URL BEFORE any import that triggers the
+// auth/db module chain (lib/server/auth/auth.ts → drizzleAdapter(db) →
+// db/index.ts Proxy → neon(process.env.DATABASE_URL)).
+// Without this, the static-import top-level execution of auth.ts would
+// call neon() with an empty string and throw at module-load time.
 process.env.DATABASE_URL = TEST_URL;
 
 const rawSql = neon(TEST_URL);
+
+// Dynamically-loaded bindings — populated in beforeAll AFTER env is set.
+// The auth module chain (auth.ts → drizzleAdapter → db Proxy → neon) only
+// initializes when these dynamic imports execute, by which point
+// process.env.DATABASE_URL is correctly set to TEST_URL.
+type AuthModule = typeof import("@/lib/server/auth/auth");
+type AuthzModule = typeof import("@/lib/server/auth/authorization");
+let auth: AuthModule["auth"];
+let getPrincipal: AuthzModule["getPrincipal"];
+let can: AuthzModule["can"];
 
 beforeAll(async () => {
   // Verify test target reachable
   const r = await rawSql`SELECT 1 AS one`;
   if (!r || r.length === 0) throw new Error("TEST DB not reachable");
+
+  // Dynamic imports — execute AFTER process.env.DATABASE_URL = TEST_URL (set above).
+  // This ensures the db Proxy's first call to neon() receives the TEST URL,
+  // not an empty string.
+  const authMod = await import("@/lib/server/auth/auth");
+  const authzMod = await import("@/lib/server/auth/authorization");
+  auth = authMod.auth;
+  getPrincipal = authzMod.getPrincipal;
+  can = authzMod.can;
 });
 
 // Clear rate limit table before each test to avoid cross-test rate limiting.
