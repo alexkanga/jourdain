@@ -1,3 +1,139 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ─── Methodist Design System — Base Styles (UI-01) ────────────────
+ * Per UI-01 spec. These are the minimal base layer overrides; the
+ * semantic tokens live in tailwind.config.ts. Components should prefer
+ * semantic utility classes (bg-brand-primary, text-text-secondary, etc.)
+ * over the raw values here.
+ * ───────────────────────────────────────────────────────────────────
+ */
+
+@layer base {
+  /* Warm neutral background per UI-01 spec (#FCFCF8) */
+  html {
+    background-color: #FCFCF8;
+  }
+
+  body {
+    @apply bg-surface-warm text-text-primary antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Heading hierarchy — uses the heading font family stack */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading text-text-primary;
+    text-wrap: balance;
+  }
+
+  /* Highly visible accessible focus ring — Methodist green/gold */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-primary ring-offset-2 ring-offset-surface-warm;
+  }
+
+  /* Form elements inherit the focus ring */
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  button:focus-visible,
+  a:focus-visible {
+    @apply outline-none ring-2 ring-brand-primary ring-offset-2 ring-offset-surface-warm;
+  }
+
+  /* ─── prefers-reduced-motion ──────────────────────────────────────
+   * Per UI-01 spec: respect prefers-reduced-motion. Disable all
+   * transitions and animations for users who request reduced motion.
+   * ─────────────────────────────────────────────────────────────────
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* ─── Button foundation — visual variants only ───────────────────
+   * Per UI-01 spec. These are reusable visual classes; the action
+   * semantics (Server Action binding, form submission, etc.) remain
+   * in the component layer. Components compose these via className.
+   * ─────────────────────────────────────────────────────────────────
+   */
+
+  /* Base button — consistent height, radius, font weight, focus, disabled */
+  .btn-base {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-sm px-4 py-2 text-sm font-medium transition-colors duration-fast disabled:cursor-not-allowed disabled:opacity-50;
+    min-height: 2.5rem; /* 40px — consistent tap target */
+  }
+
+  /* PRIMARY — brand green */
+  .btn-primary {
+    @apply btn-base bg-brand-primary text-brand-primary-foreground hover:bg-brand-primary-hover;
+  }
+
+  /* SECONDARY — white / neutral border */
+  .btn-secondary {
+    @apply btn-base bg-surface text-text-primary border border-border-strong hover:bg-surface-muted;
+  }
+
+  /* GOLD / EMPHASIS — Methodist gold */
+  .btn-gold {
+    @apply btn-base bg-brand-gold text-brand-gold-foreground hover:bg-brand-gold-hover;
+  }
+
+  /* WARNING — amber/gold */
+  .btn-warning {
+    @apply btn-base bg-warning text-warning-foreground hover:bg-brand-gold-hover;
+  }
+
+  /* DANGER — restrained red */
+  .btn-danger {
+    @apply btn-base bg-danger text-danger-foreground hover:opacity-90;
+  }
+
+  /* GHOST — navigation actions (transparent, hover surface) */
+  .btn-ghost {
+    @apply btn-base bg-transparent text-text-primary hover:bg-surface-muted;
+  }
+
+  /* ─── Role badges — per UI-01 spec ────────────────────────────────
+   * Distinctive visual treatment per role. Not flashy.
+   * ─────────────────────────────────────────────────────────────────
+   */
+  .role-badge {
+    @apply inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-semibold uppercase tracking-wide;
+  }
+  .role-badge-admin {
+    @apply role-badge bg-role-admin-bg text-role-admin-text;
+  }
+  .role-badge-super-admin {
+    @apply role-badge bg-role-super-admin-bg text-role-super-admin-text;
+  }
+  .role-badge-fantomas {
+    @apply role-badge bg-role-fantomas-bg text-role-fantomas-text;
+  }
+
+  /* ─── Navigation links — active state ────────────────────────────
+   * Active nav links use brand green; inactive use text-secondary.
+   * Not color alone — active links also have a left border accent
+   * (sidebar) or underline (header).
+   * ─────────────────────────────────────────────────────────────────
+   */
+  .nav-link {
+    @apply rounded-sm px-3 py-2 text-sm font-medium text-text-secondary transition-colors duration-fast hover:text-text-primary hover:bg-surface-muted;
+  }
+  .nav-link-active {
+    @apply nav-link text-brand-primary bg-brand-surface;
+  }
+
+  /* ─── Card surface ──────────────────────────────────────────────── */
+  .card-surface {
+    @apply rounded-md bg-surface border border-border shadow-card;
+  }
+}

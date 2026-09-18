@@ -1,13 +1,14 @@
 "use client";
 
 import { useTransition } from "react";
+import { LogOut } from "lucide-react";
 
 /**
  * LogoutButton — unified admin logout.
  *
  * Detects the active session type from the server-rendered `logoutMode`
- * prop (passed down from app/admin/(protected)/layout.tsx based on
- * principal.principalType) and routes to the correct logout endpoint:
+ * prop (passed down from the admin layout based on principal.principalType)
+ * and routes to the correct logout endpoint:
  *
  *   - Fantomas session (principalType === "FANTOMAS") →
  *     POST /api/fantomas/logout ONLY (clears the Fantomas cookie).
@@ -19,19 +20,27 @@ import { useTransition } from "react";
  *
  * If logoutMode is undefined (legacy callers), falls back to Better Auth
  * signOut for backward compatibility.
+ *
+ * UI-01 (Methodist Design System):
+ *   - Uses the btn-ghost variant (clear but not visually dominant —
+ *     per UI-01 spec: "logout clear but not visually dominant").
+ *   - Includes a LogOut icon for visual clarity.
+ *   - Accessible: aria-label, focus ring, disabled state.
  */
 
 export function LogoutButton({
   logoutMode,
+  className,
 }: {
   /**
    * Server-rendered hint about which logout path to take.
-   * Passed from app/admin/(protected)/layout.tsx based on principal.principalType.
+   * Passed from the admin layout based on principal.principalType.
    * - "FANTOMAS" → POST /api/fantomas/logout
    * - "ADMIN" | "SUPER_ADMIN" → authClient.signOut()
    * If undefined, falls back to Better Auth signOut (legacy behavior).
    */
   logoutMode?: "FANTOMAS" | "ADMIN" | "SUPER_ADMIN";
+  className?: string;
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -45,8 +54,9 @@ export function LogoutButton({
           headers: { "Content-Type": "application/json" },
         });
       } else {
-        // ADMIN logout: existing Better Auth signOut — calls /api/auth/sign-out
-        // which properly clears the Better Auth session cookie via Set-Cookie.
+        // ADMIN/SUPER_ADMIN logout: existing Better Auth signOut — calls
+        // /api/auth/sign-out which properly clears the Better Auth session
+        // cookie via Set-Cookie.
         const { authClient } = await import("@/lib/auth-client");
         await authClient.signOut();
       }
@@ -62,8 +72,10 @@ export function LogoutButton({
       type="button"
       onClick={() => startTransition(handleLogout)}
       disabled={pending}
-      className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+      className={`btn-ghost w-full justify-start gap-2 ${className ?? ""}`}
+      aria-label="Déconnexion"
     >
+      <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
       {pending ? "Déconnexion…" : "Déconnexion"}
     </button>
   );

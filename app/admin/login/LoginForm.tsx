@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { FANTOMAS_USERNAME } from "@/lib/server/auth/fantomas-auth";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 
 /**
  * LoginForm — admin login form (Client Component).
@@ -21,9 +22,16 @@ import { FANTOMAS_USERNAME } from "@/lib/server/auth/fantomas-auth";
  * On invalid credentials: displays "Identifiants invalides" — no
  * information leak about which field was wrong (per FR-001 acceptance).
  *
+ * UI-01 (Methodist Design System):
+ *   - Brand logo + JOURDAIN EMPLOI heading + institutional subtitle.
+ *   - Methodist green primary button.
+ *   - Accessible focus ring.
+ *   - Responsive center layout.
+ *
  * Only AFTER successful authentication may an authorized JOURDAIN
- * administrative principal (ADMIN or FANTOMAS) enter the protected admin
- * area. The admin layout guard (getPrincipal) enforces this server-side.
+ * administrative principal (ADMIN, SUPER_ADMIN, or FANTOMAS) enter the
+ * protected admin area. The admin layout guard (getPrincipal) enforces
+ * this server-side.
  */
 
 export function LoginForm() {
@@ -84,19 +92,29 @@ export function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-surface-warm px-4 py-12">
       <div className="w-full max-w-md">
-        <div className="mb-6 text-center">
-          <h1 className="text-2xl font-bold text-gray-900">
-            JOURDAIN EMPLOI — Administration
+        {/* Brand block */}
+        <div className="mb-6 flex flex-col items-center text-center">
+          <BrandLogo size="lg" className="mb-3" />
+          <h1 className="font-heading text-2xl font-bold text-text-primary">
+            JOURDAIN EMPLOI
           </h1>
-          <p className="mt-2 text-sm text-gray-600">
+          <p className="mt-1 text-sm text-text-secondary">
+            Église Méthodiste de Côte d&apos;Ivoire
+          </p>
+          <p className="mt-4 text-sm text-text-secondary">
             Connectez-vous pour gérer les offres.
           </p>
         </div>
-        <div className="rounded-lg border bg-white p-6 shadow-sm">
+
+        {/* Login card */}
+        <div className="card-surface p-6">
           {error && (
-            <div className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+            <div
+              className="mb-4 rounded-sm border border-danger bg-danger-surface p-3 text-sm text-danger"
+              role="alert"
+            >
               {error}
             </div>
           )}
@@ -104,7 +122,7 @@ export function LoginForm() {
             <div>
               <label
                 htmlFor="username"
-                className="mb-1 block text-sm font-medium text-gray-700"
+                className="mb-1 block text-sm font-medium text-text-primary"
               >
                 Nom d&apos;utilisateur
               </label>
@@ -114,14 +132,14 @@ export function LoginForm() {
                 type="text"
                 required
                 autoComplete="username"
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="block w-full rounded-sm border border-border-strong bg-surface px-3 py-2 text-text-primary placeholder:text-text-secondary focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
                 placeholder="Fantomas"
               />
             </div>
             <div>
               <label
                 htmlFor="password"
-                className="mb-1 block text-sm font-medium text-gray-700"
+                className="mb-1 block text-sm font-medium text-text-primary"
               >
                 Mot de passe
               </label>
@@ -131,19 +149,19 @@ export function LoginForm() {
                 type="password"
                 required
                 autoComplete="current-password"
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="block w-full rounded-sm border border-border-strong bg-surface px-3 py-2 text-text-primary placeholder:text-text-secondary focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
               />
             </div>
             <button
               type="submit"
               disabled={pending}
-              className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+              className="btn-primary w-full"
             >
               {pending ? "Connexion…" : "Se connecter"}
             </button>
           </form>
         </div>
-        <p className="mt-4 text-center text-xs text-gray-500">
+        <p className="mt-4 text-center text-xs text-text-secondary">
           Pas d&apos;inscription publique. Comptes administratifs uniquement.
         </p>
       </div>
