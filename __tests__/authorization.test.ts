@@ -28,7 +28,8 @@ describe("can() — business authorization capability matrix", () => {
   it("allows FANTOMAS to use all ADMIN capabilities", () => {
     const adminCapabilities: Capability[] = [
       "offer:create", "offer:edit", "offer:save",
-      "offer:publish", "offer:suspend", "offer:republish", "offer:archive",
+      "offer:publish", "offer:suspend", "offer:republish",
+      "offer:archive", "offer:restore",
       "admin:login",
     ];
     for (const cap of adminCapabilities) {

@@ -14,14 +14,16 @@
  * 9. PUBLIC list 404 / direct URL 404
  * 10. republish (preserves published_at)
  * 11. PUBLIC sees again
- * 12. archive (terminal)
+ * 12. archive (terminal) — confirmation dialog accepted
  * 13. PUBLIC not visible, direct URL 404
- * 14. ADMIN list shows ARCHIVED, content preserved
+ * 14. ADMIN list shows ARCHIVED, content preserved — Restaurer available
  * 15. logout
  *
  * UI selectors (per §5.33 data-testid policy — prefer role/label/text):
- * - Admin offer list: each row has the title as a link + action buttons (Publier/Suspendre/Republier/Archiver) directly in Actions column.
+ * - Admin offer list: each row has the title as a link + action buttons (Publier/Suspendre/Republier/Archiver/Restaurer) directly in Actions column.
  * - Edit page: title input + Tiptap editor (contenteditable) + Enregistrer button.
+ * - Archive action displays a window.confirm() dialog — accepted in this journey.
+ * - Restore (Restaurer) is available for ARCHIVED rows (BR-024 V1.1 soft-restore).
  */
 
 import { test, expect } from "@playwright/test";
@@ -112,8 +114,18 @@ test("admin critical 15-step journey", async ({ browser }) => {
   await publicPage.goto("/");
   await expect(publicPage.getByText("E2E_ADMIN_CRITICAL_JOURNEY_OFFER")).toBeVisible({ timeout: 15_000 });
 
-  // ===== Step 12: archive (terminal) =====
+  // ===== Step 12: archive (terminal) — confirmation dialog accepted =====
+  // The Archiver button now shows a window.confirm() dialog before archiving.
+  // We register a one-time dialog handler that accepts it.
   const rowForArchive = adminPage.locator("tr").filter({ hasText: "E2E_ADMIN_CRITICAL_JOURNEY_OFFER" }).first();
+  adminPage.once("dialog", async (dialog) => {
+    expect(dialog.type()).toBe("confirm");
+    // Verify the confirmation message matches the archive warning contract.
+    expect(dialog.message()).toContain("Archiver cette offre");
+    expect(dialog.message()).toContain("retirée du portail public");
+    expect(dialog.message()).toContain("restaurer");
+    await dialog.accept();
+  });
   await rowForArchive.getByRole("button", { name: /archiver/i }).click();
   // Use exact text matching for the status badge ("Archivée") to avoid matching
   // "Aucune action (archivée)" in the Actions cell. The status badge is in a cell
@@ -126,10 +138,12 @@ test("admin critical 15-step journey", async ({ browser }) => {
   const responseArchived = await publicPage.goto(publicDetailUrl);
   expect(responseArchived?.status()).toBe(404);
 
-  // ===== Step 14: ADMIN list shows ARCHIVED, content preserved =====
+  // ===== Step 14: ADMIN list shows ARCHIVED, content preserved — Restaurer available =====
   await adminPage.goto("/admin/offres");
   await expect(adminPage.getByText("E2E_ADMIN_CRITICAL_JOURNEY_OFFER")).toBeVisible({ timeout: 15_000 });
   await expect(adminPage.locator("tr").filter({ hasText: "E2E_ADMIN_CRITICAL_JOURNEY_OFFER" }).first().getByRole("cell", { name: "Archivée", exact: true })).toBeVisible();
+  // Restaurer button is visible for the ARCHIVED row (BR-024 V1.1 soft-restore)
+  await expect(adminPage.locator("tr").filter({ hasText: "E2E_ADMIN_CRITICAL_JOURNEY_OFFER" }).first().getByRole("button", { name: /restaurer/i })).toBeVisible();
 
   // ===== Step 15: logout =====
   await adminPage.getByRole("button", { name: /déconnexion|se déconnecter|logout/i }).click();

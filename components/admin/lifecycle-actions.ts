@@ -6,6 +6,7 @@ import {
   suspendOffer,
   republishOffer,
   archiveOffer,
+  restoreOffer,
 } from "@/lib/server/services/offers";
 import { offerIdSchema } from "@/lib/server/validation/schemas";
 import { revalidatePath } from "next/cache";
@@ -21,8 +22,10 @@ import { revalidatePath } from "next/cache";
  * 5. execute only the permitted mutation;
  * 6. return a controlled result { ok, error? } — never throw to the client.
  *
- * ARCHIVED is terminal (BR-024) — no V1 action transitions out.
- * published_at: SET on first publish; PRESERVED on suspend, republish, archive (BR-022).
+ * ARCHIVED is a SOFT lifecycle state (BR-024 V1.1):
+ *   - Restaurer transitions out (DRAFT if never-published, SUSPENDED if previously-published)
+ *   - published_at is PRESERVED on suspend, republish, archive, restore (BR-022, BR-023, BR-024).
+ *   - Restoring a previously-published offer MUST NOT auto-republish it.
  */
 
 export type LifecycleActionResult =
@@ -107,6 +110,27 @@ export async function archiveOfferAction(
     return { ok: false, error: "Identifiant d'offre invalide" };
   }
   const r = await archiveOffer(parsed.data.id);
+  if (!r.ok) return r;
+  revalidatePath("/admin/offres");
+  revalidatePath(`/admin/offres/${parsed.data.id}`);
+  return { ok: true };
+}
+
+export async function restoreOfferAction(
+  formData: FormData,
+): Promise<LifecycleActionResult> {
+  try {
+    await requireCapability("offer:restore");
+  } catch {
+    return { ok: false, error: "Action non autorisée" };
+  }
+  const parsed = offerIdSchema.safeParse({
+    id: String(formData.get("id") ?? ""),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: "Identifiant d'offre invalide" };
+  }
+  const r = await restoreOffer(parsed.data.id);
   if (!r.ok) return r;
   revalidatePath("/admin/offres");
   revalidatePath(`/admin/offres/${parsed.data.id}`);

@@ -17,8 +17,11 @@ import { readFileSync } from "node:fs";
  * - PUBLISHED → SUSPENDED (preserves content + published_at, BR-023)
  * - SUSPENDED → PUBLISHED (preserves published_at, BR-022)
  * - DRAFT/PUBLISHED/SUSPENDED → ARCHIVED (preserves content + published_at)
- * - ARCHIVED terminal (no V1 action transitions out)
- * - invalid transitions rejected server-side
+ * - ARCHIVED soft-restore (BR-024 V1.1):
+ *     - ARCHIVED + published_at NULL    → DRAFT     (never-published)
+ *     - ARCHIVED + published_at NOT NULL → SUSPENDED (previously-published, NO auto-republish)
+ * - Restore preserves published_at (NEVER reset)
+ * - invalid transitions rejected server-side (incl. Restore on non-ARCHIVED)
  * - no physical delete path
  * - deadline does NOT mutate status (FR-035)
  * - Tiptap JSON round-trip
@@ -259,7 +262,7 @@ describe("offers integration — CRUD + lifecycle (real TEST_DATABASE_URL)", () 
     expect(after!.status).toBe("ARCHIVED");
   });
 
-  it("ARCHIVED terminal — no transition out (BR-024)", async () => {
+  it("ARCHIVED soft-restore — active lifecycle actions rejected on ARCHIVED (BR-024 V1.1)", async () => {
     const create = await offers.createOffer(SAMPLE_OFFER_INPUT);
     expect(create.ok).toBe(true);
     if (!create.ok) return;
@@ -267,7 +270,7 @@ describe("offers integration — CRUD + lifecycle (real TEST_DATABASE_URL)", () 
     await offers.publishOffer(create.data.id);
     await offers.archiveOffer(create.data.id);
 
-    // All lifecycle actions should be rejected on ARCHIVED
+    // Active lifecycle actions (NOT Restore) must be rejected on ARCHIVED.
     const pub = await offers.publishOffer(create.data.id);
     expect(pub.ok).toBe(false);
     const sus = await offers.suspendOffer(create.data.id);
@@ -278,6 +281,161 @@ describe("offers integration — CRUD + lifecycle (real TEST_DATABASE_URL)", () 
     expect(arc.ok).toBe(false); // already archived
     const after = await offers.getOfferById(create.data.id);
     expect(after!.status).toBe("ARCHIVED"); // unchanged
+  });
+
+  it("ARCHIVED never-published → Restore → DRAFT (BR-024 V1.1)", async () => {
+    const create = await offers.createOffer(SAMPLE_OFFER_INPUT);
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+    createdOfferIds.push(create.data.id);
+    // DRAFT → ARCHIVED directly (never published)
+    await offers.archiveOffer(create.data.id);
+    const before = await offers.getOfferById(create.data.id);
+    expect(before!.status).toBe("ARCHIVED");
+    expect(before!.publishedAt).toBeNull();
+
+    const r = await offers.restoreOffer(create.data.id);
+    expect(r.ok).toBe(true);
+    const after = await offers.getOfferById(create.data.id);
+    expect(after!.status).toBe("DRAFT");
+    expect(after!.publishedAt).toBeNull(); // never published — still NULL
+  });
+
+  it("ARCHIVED previously-published → Restore → SUSPENDED (BR-024 V1.1, NO auto-republish)", async () => {
+    const create = await offers.createOffer(SAMPLE_OFFER_INPUT);
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+    createdOfferIds.push(create.data.id);
+    await offers.publishOffer(create.data.id);
+    const publishedAt = (await offers.getOfferById(create.data.id))!.publishedAt!;
+    await offers.archiveOffer(create.data.id);
+    const before = await offers.getOfferById(create.data.id);
+    expect(before!.status).toBe("ARCHIVED");
+    expect(before!.publishedAt).not.toBeNull();
+
+    const r = await offers.restoreOffer(create.data.id);
+    expect(r.ok).toBe(true);
+    const after = await offers.getOfferById(create.data.id);
+    expect(after!.status).toBe("SUSPENDED"); // NOT PUBLISHED — no auto-republish
+    expect(after!.publishedAt!.getTime()).toBe(publishedAt.getTime()); // preserved
+  });
+
+  it("Restore preserves published_at — previously-published (BR-022, BR-024 V1.1)", async () => {
+    const create = await offers.createOffer(SAMPLE_OFFER_INPUT);
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+    createdOfferIds.push(create.data.id);
+    await offers.publishOffer(create.data.id);
+    const originalPublishedAt = (await offers.getOfferById(create.data.id))!.publishedAt!;
+    await offers.suspendOffer(create.data.id);
+    await offers.archiveOffer(create.data.id);
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    await offers.restoreOffer(create.data.id);
+    const after = await offers.getOfferById(create.data.id);
+    expect(after!.status).toBe("SUSPENDED");
+    expect(after!.publishedAt!.getTime()).toBe(originalPublishedAt.getTime()); // PRESERVED, not reset
+  });
+
+  it("Restore preserves published_at NULL — never-published (BR-022, BR-024 V1.1)", async () => {
+    const create = await offers.createOffer(SAMPLE_OFFER_INPUT);
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+    createdOfferIds.push(create.data.id);
+    await offers.archiveOffer(create.data.id);
+
+    await offers.restoreOffer(create.data.id);
+    const after = await offers.getOfferById(create.data.id);
+    expect(after!.status).toBe("DRAFT");
+    expect(after!.publishedAt).toBeNull(); // preserved NULL
+  });
+
+  it("Restored SUSPENDED offer is NOT publicly visible (no auto-republish)", async () => {
+    // Re-uses public-offers service to verify visibility boundary.
+    const publicOffers = await import("../lib/server/services/public-offers");
+    const create = await offers.createOffer(SAMPLE_OFFER_INPUT);
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+    createdOfferIds.push(create.data.id);
+    await offers.publishOffer(create.data.id);
+    await offers.archiveOffer(create.data.id);
+    await offers.restoreOffer(create.data.id);
+    const after = await offers.getOfferById(create.data.id);
+    expect(after!.status).toBe("SUSPENDED");
+
+    // Public detail must return null (SUSPENDED is hidden — BR-025).
+    const pub = await publicOffers.getPublishedOfferById(create.data.id);
+    expect(pub).toBeNull();
+    // Public list must NOT contain the restored SUSPENDED offer.
+    const { items } = await publicOffers.listPublishedOffers({});
+    expect(items.some((o) => o.id === create.data.id)).toBe(false);
+  });
+
+  it("Explicit Republier on restored SUSPENDED offer restores public visibility", async () => {
+    const publicOffers = await import("../lib/server/services/public-offers");
+    const create = await offers.createOffer(SAMPLE_OFFER_INPUT);
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+    createdOfferIds.push(create.data.id);
+    await offers.publishOffer(create.data.id);
+    const originalPublishedAt = (await offers.getOfferById(create.data.id))!.publishedAt!;
+    await offers.archiveOffer(create.data.id);
+    await offers.restoreOffer(create.data.id);
+    const restored = await offers.getOfferById(create.data.id);
+    expect(restored!.status).toBe("SUSPENDED");
+
+    // Explicit Republier → PUBLISHED → public visibility restored
+    await offers.republishOffer(create.data.id);
+    const after = await offers.getOfferById(create.data.id);
+    expect(after!.status).toBe("PUBLISHED");
+    expect(after!.publishedAt!.getTime()).toBe(originalPublishedAt.getTime()); // STILL preserved
+    const pub = await publicOffers.getPublishedOfferById(create.data.id);
+    expect(pub).not.toBeNull();
+    expect(pub!.title).toBe(SAMPLE_OFFER_INPUT.title);
+  });
+
+  it("Restore on non-ARCHIVED rejected (DRAFT, PUBLISHED, SUSPENDED)", async () => {
+    const create = await offers.createOffer(SAMPLE_OFFER_INPUT);
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+    createdOfferIds.push(create.data.id);
+
+    // Restore on DRAFT rejected
+    const r1 = await offers.restoreOffer(create.data.id);
+    expect(r1.ok).toBe(false);
+    expect(r1.ok === false && r1.error).toContain("pas archivée");
+
+    // Restore on PUBLISHED rejected
+    await offers.publishOffer(create.data.id);
+    const r2 = await offers.restoreOffer(create.data.id);
+    expect(r2.ok).toBe(false);
+    expect(r2.ok === false && r2.error).toContain("pas archivée");
+
+    // Restore on SUSPENDED rejected
+    await offers.suspendOffer(create.data.id);
+    const r3 = await offers.restoreOffer(create.data.id);
+    expect(r3.ok).toBe(false);
+    expect(r3.ok === false && r3.error).toContain("pas archivée");
+  });
+
+  it("Restore on already-ARCHIVED twice — second Restore returns to DRAFT/SUSPENDED again", async () => {
+    // Idempotent soft-restore: ARCHIVED → DRAFT/SUSPENDED → ARCHIVED → DRAFT/SUSPENDED again.
+    const create = await offers.createOffer(SAMPLE_OFFER_INPUT);
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+    createdOfferIds.push(create.data.id);
+    await offers.publishOffer(create.data.id);
+    const publishedAt = (await offers.getOfferById(create.data.id))!.publishedAt!;
+
+    await offers.archiveOffer(create.data.id);
+    await offers.restoreOffer(create.data.id);
+    expect((await offers.getOfferById(create.data.id))!.status).toBe("SUSPENDED");
+    await offers.archiveOffer(create.data.id);
+    await offers.restoreOffer(create.data.id);
+    const after = await offers.getOfferById(create.data.id);
+    expect(after!.status).toBe("SUSPENDED");
+    expect(after!.publishedAt!.getTime()).toBe(publishedAt.getTime()); // STILL preserved
   });
 
   it("invalid transitions rejected server-side (DRAFT→SUSPEND, PUBLISHED→PUBLISH)", async () => {
@@ -347,7 +505,7 @@ describe("offers integration — CRUD + lifecycle (real TEST_DATABASE_URL)", () 
 
   it("no physical delete path in service layer (FR-034)", async () => {
     // The offers service exports: listOffers, getOfferById, createOffer,
-    // updateOffer, publishOffer, suspendOffer, republishOffer, archiveOffer.
+    // updateOffer, publishOffer, suspendOffer, republishOffer, archiveOffer, restoreOffer.
     // There is NO deleteOffer function. Verify the export surface.
     expect(typeof offers.createOffer).toBe("function");
     expect(typeof offers.updateOffer).toBe("function");
@@ -355,6 +513,7 @@ describe("offers integration — CRUD + lifecycle (real TEST_DATABASE_URL)", () 
     expect(typeof offers.suspendOffer).toBe("function");
     expect(typeof offers.republishOffer).toBe("function");
     expect(typeof offers.archiveOffer).toBe("function");
+    expect(typeof offers.restoreOffer).toBe("function");
     expect(offers).not.toHaveProperty("deleteOffer");
   });
 

@@ -7,6 +7,7 @@ export type Capability =
   | "offer:suspend"
   | "offer:republish"
   | "offer:archive"
+  | "offer:restore"
   | "admin:login"
   | "system:bootstrap"
   | "system:recovery";
@@ -30,6 +31,7 @@ const ADMIN_CAPABILITIES: Capability[] = [
   "offer:suspend",
   "offer:republish",
   "offer:archive",
+  "offer:restore",
   "admin:login",
 ];
 

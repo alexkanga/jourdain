@@ -15,10 +15,13 @@ import type { OfferInput } from "@/lib/server/validation/schemas";
  * Per WP-003 contract:
  * - No physical delete (FR-034).
  * - No automatic status transitions from dates (FR-035, BR-026).
- * - ARCHIVED is terminal (BR-024).
+ * - ARCHIVED is a soft lifecycle state — Restaurer transitions out (BR-024 V1.1):
+ *     ARCHIVED + published_at IS NULL → DRAFT (never-published offer)
+ *     ARCHIVED + published_at NOT NULL → SUSPENDED (previously public;
+ *       explicit Republier required to become public again — NO auto republish)
  * - save != publish (BR-021).
  * - published_at: SET on first publication; PRESERVED on republication,
- *   suspension, archive, edit (BR-022, BR-023, BR-024, FR-025).
+ *   suspension, archive, restore, edit (BR-022, BR-023, BR-024, FR-025).
  */
 
 export type OfferStatus = "DRAFT" | "PUBLISHED" | "SUSPENDED" | "ARCHIVED";
@@ -272,7 +275,8 @@ export async function republishOffer(id: string): Promise<ServiceResult<{ id: st
 
 /**
  * Archive any active offer (DRAFT, PUBLISHED, SUSPENDED). Preserves content + published_at.
- * Rejects if ARCHIVED (terminal — BR-024).
+ * Rejects if already ARCHIVED (no-op).
+ * Archive is now a SOFT lifecycle state — Restaurer transitions out (BR-024 V1.1).
  */
 export async function archiveOffer(id: string): Promise<ServiceResult<{ id: string }>> {
   try {
@@ -299,6 +303,48 @@ export async function archiveOffer(id: string): Promise<ServiceResult<{ id: stri
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[offers.archiveOffer] error:", msg);
+    return { ok: false, error: "Erreur technique" };
+  }
+}
+
+/**
+ * Restore an ARCHIVED offer. Soft-restore rule (BR-024 V1.1):
+ *   - If published_at IS NULL        → DRAFT     (never-published offer)
+ *   - If published_at IS NOT NULL     → SUSPENDED (previously public; NO auto-republish)
+ *
+ * Preserves published_at (NEVER reset). The administrator must explicitly click
+ * Republier to make a previously-published restored offer public again — restoring
+ * MUST NOT automatically republish the offer.
+ *
+ * Rejects if current status is not ARCHIVED.
+ */
+export async function restoreOffer(id: string): Promise<ServiceResult<{ id: string }>> {
+  try {
+    const existing = await getOfferById(id);
+    if (!existing) {
+      return { ok: false, error: "Offre introuvable" };
+    }
+    if (existing.status !== "ARCHIVED") {
+      return { ok: false, error: "L'offre n'est pas archivée" };
+    }
+    const targetStatus: "DRAFT" | "SUSPENDED" =
+      existing.publishedAt === null ? "DRAFT" : "SUSPENDED";
+    // published_at is NOT in the SET clause — preserved, NEVER reset (BR-022)
+    const [updated] = await db
+      .update(offers)
+      .set({
+        status: targetStatus,
+        updatedAt: new Date(),
+      })
+      .where(eq(offers.id, id))
+      .returning({ id: offers.id });
+    if (!updated) {
+      return { ok: false, error: "Erreur technique: offre non restaurée" };
+    }
+    return { ok: true, data: { id: updated.id } };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[offers.restoreOffer] error:", msg);
     return { ok: false, error: "Erreur technique" };
   }
 }

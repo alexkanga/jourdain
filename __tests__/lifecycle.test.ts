@@ -1,24 +1,46 @@
 import { describe, it, expect } from "vitest";
 
 /**
- * Unit tests — offer lifecycle state machine (BR-020, BR-024, FR-030–FR-033).
+ * Unit tests — offer lifecycle state machine (BR-020, BR-024 V1.1, FR-030–FR-033).
  *
  * These tests define the canonical allowed + forbidden transitions.
  * The implementation in lib/server/services/offers.ts enforces the same
  * rules server-side; integration tests verify the actual DB mutations.
+ *
+ * ARCHIVED is a SOFT lifecycle state (BR-024 V1.1):
+ *   - ARCHIVED + published_at IS NULL     → DRAFT     (Restaurer, never-published)
+ *   - ARCHIVED + published_at IS NOT NULL  → SUSPENDED (Restaurer, previously-published)
+ * The target of a Restore depends on published_at — see restoreTarget() below.
+ * published_at is PRESERVED across all transitions (BR-022, BR-023, BR-024).
  */
 
 type OfferStatus = "DRAFT" | "PUBLISHED" | "SUSPENDED" | "ARCHIVED";
 
+/**
+ * Allowed transitions for the "active" side of the lifecycle
+ * (DRAFT/PUBLISHED/SUSPENDED). ARCHIVED transitions are determined by
+ * restoreTarget() based on published_at.
+ */
 const ALLOWED_TRANSITIONS: Record<OfferStatus, OfferStatus[]> = {
   DRAFT: ["PUBLISHED", "ARCHIVED"],
   PUBLISHED: ["SUSPENDED", "ARCHIVED"],
   SUSPENDED: ["PUBLISHED", "ARCHIVED"],
-  ARCHIVED: [], // terminal in V1
+  ARCHIVED: [], // handled separately by restoreTarget() — see below
 };
 
 function canTransition(from: OfferStatus, to: OfferStatus): boolean {
   return ALLOWED_TRANSITIONS[from].includes(to);
+}
+
+/**
+ * Soft-restore rule (BR-024 V1.1):
+ *   ARCHIVED + published_at IS NULL     → DRAFT
+ *   ARCHIVED + published_at IS NOT NULL  → SUSPENDED  (NO auto-republish)
+ */
+function restoreTarget(
+  publishedAt: Date | null,
+): "DRAFT" | "SUSPENDED" {
+  return publishedAt === null ? "DRAFT" : "SUSPENDED";
 }
 
 describe("offer lifecycle state machine", () => {
@@ -64,17 +86,30 @@ describe("offer lifecycle state machine", () => {
     });
   });
 
-  describe("ARCHIVED terminal (BR-024)", () => {
-    it("ARCHIVED → DRAFT forbidden", () => {
-      expect(canTransition("ARCHIVED", "DRAFT")).toBe(false);
+  describe("ARCHIVED soft-restore (BR-024 V1.1)", () => {
+    it("ARCHIVED never-published → DRAFT (Restaurer)", () => {
+      expect(restoreTarget(null)).toBe("DRAFT");
     });
-    it("ARCHIVED → PUBLISHED forbidden", () => {
-      expect(canTransition("ARCHIVED", "PUBLISHED")).toBe(false);
+    it("ARCHIVED previously-published → SUSPENDED (Restaurer — NO auto-republish)", () => {
+      expect(restoreTarget(new Date("2026-09-18T00:00:00Z"))).toBe("SUSPENDED");
     });
-    it("ARCHIVED → SUSPENDED forbidden", () => {
-      expect(canTransition("ARCHIVED", "SUSPENDED")).toBe(false);
+    it("ARCHIVED → PUBLISHED forbidden (no auto-republish)", () => {
+      // Restaurer MUST NOT make a previously-published offer public automatically.
+      expect(restoreTarget(new Date("2026-09-18T00:00:00Z"))).not.toBe("PUBLISHED");
+    });
+    it("ARCHIVED previously-published restored to SUSPENDED then PUBLISHED via Republier", () => {
+      // After Restore → SUSPENDED, the admin may explicitly Republier → PUBLISHED.
+      const restored = restoreTarget(new Date("2026-09-18T00:00:00Z"));
+      expect(canTransition(restored, "PUBLISHED")).toBe(true);
+    });
+    it("ARCHIVED never-published restored to DRAFT then PUBLISHED via Publier", () => {
+      // After Restore → DRAFT, the admin may explicitly Publier → PUBLISHED.
+      const restored = restoreTarget(null);
+      expect(canTransition(restored, "PUBLISHED")).toBe(true);
     });
     it("ARCHIVED → ARCHIVED (no-op, rejected)", () => {
+      // Restore on a non-archived offer is rejected server-side.
+      // There is no "ARCHIVED → ARCHIVED" transition; restore always moves out.
       expect(canTransition("ARCHIVED", "ARCHIVED")).toBe(false);
     });
   });

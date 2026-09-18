@@ -6,6 +6,7 @@ import {
   suspendOfferAction,
   republishOfferAction,
   archiveOfferAction,
+  restoreOfferAction,
 } from "./lifecycle-actions";
 import type { OfferStatus } from "@/lib/server/services/offers";
 
@@ -13,14 +14,21 @@ import type { OfferStatus } from "@/lib/server/services/offers";
  * LifecycleButtons — admin action buttons for an offer row in the list.
  *
  * Actions depend on current status:
- * - DRAFT: Publish, Archive
- * - PUBLISHED: Suspend, Archive
- * - SUSPENDED: Republish, Archive
- * - ARCHIVED: (no actions — terminal; read-only View)
+ * - DRAFT:     Publier, Archiver
+ * - PUBLISHED: Suspendre, Archiver
+ * - SUSPENDED: Republier, Archiver
+ * - ARCHIVED:  Restaurer (soft-restore: DRAFT if never-published, SUSPENDED if previously-published)
+ *
+ * Archive requires an explicit confirmation dialog (window.confirm) to prevent
+ * accidental archiving — the offer is removed from the public portal but can be
+ * restored later via Restaurer.
  *
  * Client-side hiding is UX ONLY — does NOT authorize. Server-side
  * requireCapability() + lifecycle state validation are the authority.
  */
+
+const ARCHIVE_CONFIRM_MESSAGE =
+  "Archiver cette offre ? Elle sera retirée du portail public. Vous pourrez la restaurer ultérieurement.";
 
 export function LifecycleButtons({
   id,
@@ -31,7 +39,7 @@ export function LifecycleButtons({
 }) {
   const [pending, startTransition] = useTransition();
 
-  const buttons: { label: string; action: (fd: FormData) => Promise<unknown>; variant: string }[] = [];
+  const buttons: { label: string; action: (fd: FormData) => Promise<unknown>; variant: string; confirm?: boolean }[] = [];
   if (status === "DRAFT") {
     buttons.push({ label: "Publier", action: publishOfferAction, variant: "bg-green-600 hover:bg-green-700 text-white font-semibold shadow-sm" });
   }
@@ -41,8 +49,20 @@ export function LifecycleButtons({
   if (status === "SUSPENDED") {
     buttons.push({ label: "Republier", action: republishOfferAction, variant: "bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm" });
   }
+  if (status === "ARCHIVED") {
+    buttons.push({
+      label: "Restaurer",
+      action: restoreOfferAction,
+      variant: "border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 font-semibold shadow-sm",
+    });
+  }
   if (status !== "ARCHIVED") {
-    buttons.push({ label: "Archiver", action: archiveOfferAction, variant: "border border-gray-300 text-gray-700 hover:bg-gray-50" });
+    buttons.push({
+      label: "Archiver",
+      action: archiveOfferAction,
+      variant: "border border-gray-300 text-gray-700 hover:bg-gray-50",
+      confirm: true,
+    });
   }
 
   if (buttons.length === 0) {
@@ -58,6 +78,10 @@ export function LifecycleButtons({
           key={b.label}
           action={() => {
             startTransition(async () => {
+              if (b.confirm && typeof window !== "undefined") {
+                const ok = window.confirm(ARCHIVE_CONFIRM_MESSAGE);
+                if (!ok) return;
+              }
               const fd = new FormData();
               fd.set("id", id);
               await b.action(fd);
