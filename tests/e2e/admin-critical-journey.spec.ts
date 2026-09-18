@@ -103,11 +103,9 @@ test("admin critical 15-step journey", async ({ browser }) => {
   expect(responseSuspended?.status()).toBe(404);
 
   // ===== Step 10: republish (preserves published_at) =====
-  // NOTE: the admin UI label for republish is "Republicaliser" (existing typo in components/admin/LifecycleButtons.tsx).
-  // Per WP-005 §32 (NO PRODUCT REDESIGN), the typo is reported as a NON-BLOCKING FINDING
-  // and NOT fixed under WP-005 scope. The test matches the actual UI label.
+  // The republish button label is "Republier" (fixed from "Republicaliser" typo).
   const rowSuspended = adminPage.locator("tr").filter({ hasText: "E2E_ADMIN_CRITICAL_JOURNEY_OFFER" }).first();
-  await rowSuspended.getByRole("button", { name: /republicaliser/i }).click();
+  await rowSuspended.getByRole("button", { name: /republier/i }).click();
   await expect(adminPage.locator("tr").filter({ hasText: "E2E_ADMIN_CRITICAL_JOURNEY_OFFER" }).first().getByText(/publiée|published/i)).toBeVisible({ timeout: 10_000 });
 
   // ===== Step 11: PUBLIC sees again =====

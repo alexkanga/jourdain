@@ -33,13 +33,13 @@ export function LifecycleButtons({
 
   const buttons: { label: string; action: (fd: FormData) => Promise<unknown>; variant: string }[] = [];
   if (status === "DRAFT") {
-    buttons.push({ label: "Publier", action: publishOfferAction, variant: "bg-green-600 hover:bg-green-700 text-white" });
+    buttons.push({ label: "Publier", action: publishOfferAction, variant: "bg-green-600 hover:bg-green-700 text-white font-semibold shadow-sm" });
   }
   if (status === "PUBLISHED") {
-    buttons.push({ label: "Suspendre", action: suspendOfferAction, variant: "bg-amber-600 hover:bg-amber-700 text-white" });
+    buttons.push({ label: "Suspendre", action: suspendOfferAction, variant: "bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-sm" });
   }
   if (status === "SUSPENDED") {
-    buttons.push({ label: "Republicaliser", action: republishOfferAction, variant: "bg-blue-600 hover:bg-blue-700 text-white" });
+    buttons.push({ label: "Republier", action: republishOfferAction, variant: "bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm" });
   }
   if (status !== "ARCHIVED") {
     buttons.push({ label: "Archiver", action: archiveOfferAction, variant: "border border-gray-300 text-gray-700 hover:bg-gray-50" });

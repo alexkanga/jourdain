@@ -114,30 +114,31 @@ function renderNode(node: TiptapNode, key: number): React.ReactNode {
       return <div key={key}>{node.content?.map((child, i) => renderNode(child, i))}</div>;
 
     case "paragraph":
-      return <p key={key}>{node.content?.map((child, i) => renderInline(child, i))}</p>;
+      return <p key={key} className="mb-3 leading-relaxed">{node.content?.map((child, i) => renderInline(child, i))}</p>;
 
     case "heading": {
       const level = (node.attrs?.level as number) ?? 1;
       const Tag = (`h${Math.min(Math.max(level, 1), 3)}`) as "h1" | "h2" | "h3";
-      return <Tag key={key}>{node.content?.map((child, i) => renderInline(child, i))}</Tag>;
+      const sizeClass = level === 1 ? "text-xl" : level === 2 ? "text-lg" : "text-base";
+      return <Tag key={key} className={`mt-4 mb-2 font-bold ${sizeClass}`}>{node.content?.map((child, i) => renderInline(child, i))}</Tag>;
     }
 
     case "bulletList":
       return (
-        <ul key={key} className="list-disc pl-6 space-y-1">
+        <ul key={key} className="mb-3 list-disc pl-6 space-y-1">
           {node.content?.map((child, i) => renderNode(child, i))}
         </ul>
       );
 
     case "orderedList":
       return (
-        <ol key={key} className="list-decimal pl-6 space-y-1">
+        <ol key={key} className="mb-3 list-decimal pl-6 space-y-1">
           {node.content?.map((child, i) => renderNode(child, i))}
         </ol>
       );
 
     case "listItem":
-      return <li key={key}>{node.content?.map((child, i) => renderNode(child, i))}</li>;
+      return <li key={key} className="leading-relaxed">{node.content?.map((child, i) => renderNode(child, i))}</li>;
 
     case "text":
       return renderMarks(node.text ?? "", node.marks);

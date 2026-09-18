@@ -56,20 +56,20 @@ export function OfferDetail({ offer }: { offer: PublicOfferRow }) {
         {offer.contractType && <span>{offer.contractType}</span>}
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-500">
-        {offer.sector && <span>Secteur : {offer.sector}</span>}
-        {offer.category && <span>Catégorie : {offer.category}</span>}
-        {offer.educationLevel && <span>Formation : {offer.educationLevel}</span>}
-        {offer.experience && <span>Expérience : {offer.experience}</span>}
+      <div className="mt-4 space-y-1 text-sm text-gray-500">
+        {offer.sector && <div>Secteur : {offer.sector}</div>}
+        {offer.category && <div>Catégorie : {offer.category}</div>}
+        {offer.educationLevel && <div>Formation : {offer.educationLevel}</div>}
+        {offer.experience && <div>Expérience : {offer.experience}</div>}
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-500">
-        <span>Publié le {formatDate(offer.publishedAt)}</span>
+      <div className="mt-4 space-y-1 text-sm text-gray-500">
+        <div>Publié le {formatDate(offer.publishedAt)}</div>
         {offer.sourcePublicationDate && (
-          <span>Source : {formatDate(offer.sourcePublicationDate)}</span>
+          <div>Source : {formatDate(offer.sourcePublicationDate)}</div>
         )}
         {offer.applicationDeadline && (
-          <span>Echéance : {formatDate(offer.applicationDeadline)}</span>
+          <div>Échéance : {formatDate(offer.applicationDeadline)}</div>
         )}
       </div>
 
