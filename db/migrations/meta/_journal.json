@@ -15,6 +15,13 @@
       "when": 1789503979564,
       "tag": "0001_happy_skullbuster",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789739686381,
+      "tag": "0002_deep_justin_hammer",
+      "breakpoints": true
     }
   ]
 }

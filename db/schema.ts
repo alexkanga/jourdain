@@ -8,8 +8,14 @@ export const offerStatus = pgEnum("offer_status", [
   "ARCHIVED",
 ]);
 
-// Principal type enum — ADMIN, FANTOMAS (per S6 §9.3.2, V1 business principal field)
-export const principalType = pgEnum("principal_type", ["ADMIN", "FANTOMAS"]);
+// Principal type enum — ADMIN, SUPER_ADMIN, FANTOMAS (per S6 §9.3.2, V1 business principal field)
+// SUPER_ADMIN was added in the user-management work package as a middle tier
+// between ADMIN and FANTOMAS. See db/migrations/0002_*.sql for the ALTER TYPE.
+export const principalType = pgEnum("principal_type", [
+  "ADMIN",
+  "SUPER_ADMIN",
+  "FANTOMAS",
+]);
 
 // Offers table (per S6 §9.3.1 — central business entity)
 export const offers = pgTable(

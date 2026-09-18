@@ -3,6 +3,8 @@ import { listOffers } from "@/lib/server/services/offers";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { LifecycleButtons } from "@/components/admin/LifecycleButtons";
 import type { OfferStatus } from "@/lib/server/services/offers";
+import { getPrincipal } from "@/lib/server/auth/authorization";
+import { can } from "@/lib/server/auth/capabilities";
 
 /**
  * Admin offer list page — Server Component.
@@ -56,6 +58,14 @@ export default async function AdminOffersPage({
 
   const { items, total, pageSize } = await listOffers({ status, q, page });
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  // Compute offer:restore capability for the current principal — passed to
+  // LifecycleButtons so the Restaurer button only shows for SUPER_ADMIN and
+  // FANTOMAS. ADMIN does not see it. The Server Action also enforces
+  // requireCapability("offer:restore") server-side — client-side hiding is
+  // UX only.
+  const principal = await getPrincipal();
+  const canRestoreOffer = principal ? can(principal, "offer:restore") : false;
 
   return (
     <div>
@@ -181,7 +191,7 @@ export default async function AdminOffersPage({
                     {formatDate(offer.updatedAt)}
                   </td>
                   <td className="px-4 py-3">
-                    <LifecycleButtons id={offer.id} status={offer.status} />
+                    <LifecycleButtons id={offer.id} status={offer.status} canRestoreOffer={canRestoreOffer} />
                   </td>
                 </tr>
               ))}

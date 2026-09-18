@@ -24,6 +24,17 @@ export const auth = betterAuth({
     username(),
     admin({
       defaultRole: "user",
+      // Better Auth admin endpoints (createUser, listUsers, setRole,
+      // removeUser, setUserPassword) require an HTTP-request caller with a
+      // session whose `role` is in `adminRoles`. Server-side API calls
+      // (auth.api.* without headers) bypass this check — the admin plugin
+      // only enforces when there's a request+session. Our user-management
+      // Server Actions use auth.api.* server-side; our application-level
+      // authorization (can()/requireCapability() reading principalType)
+      // is the actual security authority for user:* capabilities.
+      // adminRoles stays at the default ["admin"] — we don't grant any
+      // JOURDAIN user the Better Auth "admin" role; we use our own
+      // principalType hierarchy (ADMIN / SUPER_ADMIN / FANTOMAS).
     }),
   ],
   user: {

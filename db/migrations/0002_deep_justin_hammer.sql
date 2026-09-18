@@ -1,0 +1,1 @@
+ALTER TYPE "public"."principal_type" ADD VALUE 'SUPER_ADMIN' BEFORE 'FANTOMAS';

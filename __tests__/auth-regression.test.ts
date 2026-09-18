@@ -160,7 +160,7 @@ describe("getPrincipal() — auth integration regression (real TEST_DATABASE_URL
     expect(principal!.username).toBeTruthy();
   });
 
-  it("C. ADMIN session: principalType = ADMIN", async () => {
+  it("C. ADMIN session: principalType is a DB-backed admin role (ADMIN or SUPER_ADMIN)", async () => {
     await sleep(1000); // avoid rate limit
     const cookie = await signInAndGetSignedCookie(
       (env.INITIAL_ADMIN_LOGIN || "admin1").toLowerCase(),
@@ -170,7 +170,10 @@ describe("getPrincipal() — auth integration regression (real TEST_DATABASE_URL
     h.set("cookie", cookie);
     const principal = await getPrincipal(h);
     expect(principal).not.toBeNull();
-    expect(principal!.principalType).toBe("ADMIN");
+    // Per user-management work package: the bootstrap-created initial admin
+    // (admin1 by default) is now a SUPER_ADMIN, not an ADMIN. Accept either
+    // DB-backed admin role here — the exact role depends on bootstrap state.
+    expect(["ADMIN", "SUPER_ADMIN"]).toContain(principal!.principalType);
   });
 
   it("D. FANTOMAS session: principalType = FANTOMAS (mixed-case 'Fantomas' input)", async () => {
@@ -243,10 +246,17 @@ describe("getPrincipal() — auth integration regression (real TEST_DATABASE_URL
     expect(can(fantomasPrincipal!, "offer:create")).toBe(true);
     expect(can(fantomasPrincipal!, "system:bootstrap")).toBe(true);
 
-    // Verify both have principalType (NOT role) as authority
-    expect(["ADMIN", "FANTOMAS"]).toContain(adminPrincipal!.principalType);
-    expect(["ADMIN", "FANTOMAS"]).toContain(fantomasPrincipal!.principalType);
-    expect(adminPrincipal!.principalType).toBe("ADMIN");
+    // Per user-management work package: admin1 is now a SUPER_ADMIN (not
+    // ADMIN). SUPER_ADMIN inherits all ADMIN capabilities + offer:restore +
+    // user:*. The Better Auth role field is "user" for both ADMIN and
+    // SUPER_ADMIN — our business authorization is on principalType, not role.
+    // The bootstrap admin can be either ADMIN or SUPER_ADMIN depending on
+    // whether the bootstrap upgrade has been applied; accept either here.
+    expect(["ADMIN", "SUPER_ADMIN", "FANTOMAS"]).toContain(adminPrincipal!.principalType);
+    expect(["ADMIN", "SUPER_ADMIN", "FANTOMAS"]).toContain(fantomasPrincipal!.principalType);
+    // The bootstrap admin is NOT FANTOMAS (Fantomas is a separate break-glass
+    // identity); the FANTOMAS session is the break-glass path.
+    expect(adminPrincipal!.principalType).not.toBe("FANTOMAS");
     expect(fantomasPrincipal!.principalType).toBe("FANTOMAS");
   }, 30000);
 

@@ -6,8 +6,14 @@ import { eq } from "drizzle-orm";
 /**
  * Idempotent bootstrap script for JOURDAIN EMPLOI system principals.
  *
- * Creates Fantomas (principalType=FANTOMAS) and initial ADMIN (principalType=ADMIN)
- * if they do not already exist. Does NOT overwrite existing users.
+ * Creates Fantomas (principalType=FANTOMAS) and initial SUPER_ADMIN
+ * (principalType=SUPER_ADMIN — admin1 by default) if they do not already
+ * exist. Does NOT overwrite existing users.
+ *
+ * Idempotent promotion: if admin1 already exists with principalType=ADMIN
+ * (the pre-user-management-work-package role), this script PROMOTES it to
+ * SUPER_ADMIN. This is the only safe idempotent transition — we never
+ * silently demote or change other users' principalType.
  *
  * Usage: pnpm db:bootstrap
  *
@@ -99,7 +105,11 @@ async function bootstrap() {
     }
   }
 
-  // --- Initial ADMIN ---
+  // --- Initial SUPER_ADMIN (admin1) ---
+  // Per user-management work package: admin1 is the initial SUPER_ADMIN,
+  // not ADMIN. This is the only role whose "create" creates a SUPER_ADMIN;
+  // all other SUPER_ADMIN/ADMIN users are created via the user-management UI
+  // by an existing SUPER_ADMIN or FANTOMAS.
   const existingAdmin = await db
     .select()
     .from(users)
@@ -107,18 +117,26 @@ async function bootstrap() {
     .limit(1);
 
   if (existingAdmin.length > 0) {
-    console.log(`ADMIN already exists (username="${ADMIN_LOGIN}") — not recreated (no overwrite)`);
-    // Verify principalType is correct
-    if (existingAdmin[0].principalType !== "ADMIN") {
-      console.log(`  WARNING: principalType is "${existingAdmin[0].principalType}" — expected "ADMIN". Fixing...`);
+    console.log(`Initial admin already exists (username="${ADMIN_LOGIN}") — not recreated (no overwrite)`);
+    // Idempotent promotion: if the user is still ADMIN (from before the
+    // user-management work package), promote to SUPER_ADMIN. This is the
+    // ONLY automatic principalType transition we perform — and only for the
+    // bootstrap initial admin. We never silently change other users'
+    // principalType here.
+    if (existingAdmin[0].principalType === "ADMIN") {
+      console.log(`  Promoting principalType ADMIN → SUPER_ADMIN (idempotent bootstrap upgrade)...`);
       await db
         .update(users)
-        .set({ principalType: "ADMIN" })
+        .set({ principalType: "SUPER_ADMIN" })
         .where(eq(users.id, existingAdmin[0].id));
-      console.log("  Fixed: principalType set to ADMIN");
+      console.log("  Promoted: principalType set to SUPER_ADMIN");
+    } else if (existingAdmin[0].principalType !== "SUPER_ADMIN") {
+      // Unexpected state (e.g., FANTOMAS collision or manual edit). Don't
+      // silently overwrite — just warn and leave alone.
+      console.log(`  WARNING: principalType is "${existingAdmin[0].principalType}" — expected "SUPER_ADMIN" or "ADMIN". NOT auto-correcting (manual review required).`);
     }
   } else {
-    console.log("Creating initial ADMIN principal...");
+    console.log("Creating initial SUPER_ADMIN principal...");
     try {
       await auth.api.createUser({
         body: {
@@ -131,7 +149,7 @@ async function bootstrap() {
         },
       });
 
-      // Set principalType server-side (default is ADMIN, but set explicitly for clarity)
+      // Set principalType to SUPER_ADMIN (default is ADMIN, so we override explicitly)
       const [newUser] = await db
         .select()
         .from(users)
@@ -141,12 +159,12 @@ async function bootstrap() {
       if (newUser) {
         await db
           .update(users)
-          .set({ principalType: "ADMIN" })
+          .set({ principalType: "SUPER_ADMIN" })
           .where(eq(users.id, newUser.id));
-        console.log(`ADMIN principal created (username="${ADMIN_LOGIN}", principalType=ADMIN)`);
+        console.log(`SUPER_ADMIN principal created (username="${ADMIN_LOGIN}", principalType=SUPER_ADMIN)`);
       }
     } catch (error) {
-      console.error("Failed to create initial ADMIN:", error);
+      console.error("Failed to create initial SUPER_ADMIN:", error);
       process.exit(1);
     }
   }
@@ -154,7 +172,7 @@ async function bootstrap() {
   console.log("=== Bootstrap complete ===");
   console.log("Summary:");
   console.log(`  Fantomas: exists (username="${FANTOMAS_USERNAME}", principalType=FANTOMAS)`);
-  console.log(`  Initial ADMIN: exists (username="${ADMIN_LOGIN}", principalType=ADMIN)`);
+  console.log(`  Initial SUPER_ADMIN: exists (username="${ADMIN_LOGIN}", principalType=SUPER_ADMIN)`);
   console.log("  Public signup: disabled");
 }
 

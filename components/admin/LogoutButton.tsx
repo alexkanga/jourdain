@@ -13,8 +13,9 @@ import { useTransition } from "react";
  *     POST /api/fantomas/logout ONLY (clears the Fantomas cookie).
  *     Per OWNER revision: does NOT call Better Auth on the Fantomas path.
  *
- *   - ADMIN session (principalType === "ADMIN") → existing Better Auth
- *     signOut via authClient.signOut() (calls /api/auth/sign-out).
+ *   - DB-backed admin session (principalType === "ADMIN" or "SUPER_ADMIN")
+ *     → existing Better Auth signOut via authClient.signOut()
+ *     (calls /api/auth/sign-out).
  *
  * If logoutMode is undefined (legacy callers), falls back to Better Auth
  * signOut for backward compatibility.
@@ -27,10 +28,10 @@ export function LogoutButton({
    * Server-rendered hint about which logout path to take.
    * Passed from app/admin/(protected)/layout.tsx based on principal.principalType.
    * - "FANTOMAS" → POST /api/fantomas/logout
-   * - "ADMIN"   → authClient.signOut()
+   * - "ADMIN" | "SUPER_ADMIN" → authClient.signOut()
    * If undefined, falls back to Better Auth signOut (legacy behavior).
    */
-  logoutMode?: "FANTOMAS" | "ADMIN";
+  logoutMode?: "FANTOMAS" | "ADMIN" | "SUPER_ADMIN";
 }) {
   const [pending, startTransition] = useTransition();
 
