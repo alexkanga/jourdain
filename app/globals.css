@@ -136,4 +136,48 @@
   .card-surface {
     @apply rounded-md bg-surface border border-border shadow-card;
   }
+
+  /* ─── Form input — shared admin form field styling (UI-03) ────────
+   * Replaces the inline OfferForm <style jsx> .form-input and the
+   * UserForm inline input classes with a single global component class.
+   * All admin form inputs use className="form-input" for consistency.
+   * ─────────────────────────────────────────────────────────────────
+   */
+  .form-input {
+    @apply block w-full rounded-sm border border-border-strong bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary transition-colors duration-fast;
+  }
+  .form-input:focus {
+    @apply border-brand-primary outline-none ring-1 ring-brand-primary;
+  }
+
+  /* ─── Form section card (UI-03) ──────────────────────────────────── */
+  .form-section {
+    @apply rounded-md border border-border bg-surface p-4 sm:p-5;
+  }
+  .form-section legend {
+    @apply font-heading text-sm font-semibold text-text-primary;
+  }
+
+  /* ─── Admin table (UI-03) ───────────────────────────────────────── */
+  .admin-table-wrap {
+    @apply overflow-x-auto rounded-md border border-border bg-surface;
+  }
+  .admin-table {
+    @apply w-full text-sm;
+  }
+  .admin-table thead {
+    @apply bg-surface-muted text-left text-xs uppercase tracking-wide text-text-secondary;
+  }
+  .admin-table th {
+    @apply px-4 py-3 font-medium;
+  }
+  .admin-table tbody {
+    @apply divide-y divide-border;
+  }
+  .admin-table td {
+    @apply px-4 py-3;
+  }
+  .admin-table tbody tr {
+    @apply transition-colors duration-fast hover:bg-surface-muted;
+  }
 }

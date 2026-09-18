@@ -2,26 +2,23 @@ import Link from "next/link";
 import { listOffers } from "@/lib/server/services/offers";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { LifecycleButtons } from "@/components/admin/LifecycleButtons";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import type { OfferStatus } from "@/lib/server/services/offers";
 import { getPrincipal } from "@/lib/server/auth/authorization";
 import { can } from "@/lib/server/auth/capabilities";
+import { Plus } from "lucide-react";
 
 /**
  * Admin offer list page — Server Component.
  *
- * Server-side authority: app/admin/layout.tsx validates authenticated
- * session via getPrincipal() before this page renders. An unauthenticated
- * request is redirected to /admin/login by the layout guard.
+ * UI-03: Methodist admin refresh — AdminPageHeader, cohesive filters,
+ * responsive table (overflow-x-auto on mobile), empty state, consistent
+ * status badges, lifecycle action buttons with Methodist variants.
  *
- * Features:
- * - All offers regardless of status, sorted by created_at DESC (FR-010)
- * - Status badge visible per row (FR-011)
- * - Status filter via ?status=DRAFT|PUBLISHED|SUSPENDED|ARCHIVED (FR-012 MUST)
- * - Title search via ?q= (ILIKE on title, case-insensitive — FR-013 SHOULD)
- * - Pagination (FR-010 acceptance: list navigable)
- * - "Nouvelle offre" button links to /admin/offres/nouvelles
- * - Empty state (FR-061)
- * - Lifecycle actions per row, depending on current status
+ * Server-side authority: admin layout guard validates authenticated session.
+ * Status filter + title search + pagination semantics unchanged.
+ * canRestoreOffer computed from principal capability and passed to
+ * LifecycleButtons — UX only, server-side requireCapability is authoritative.
  */
 
 const STATUS_OPTIONS: OfferStatus[] = ["DRAFT", "PUBLISHED", "SUSPENDED", "ARCHIVED"];
@@ -33,9 +30,9 @@ const STATUS_LABELS: Record<OfferStatus, string> = {
 };
 
 function formatDate(value: string | Date | null | undefined): string {
-  if (!value) return "";
+  if (!value) return "—";
   const d = typeof value === "string" ? new Date(value) : value;
-  if (isNaN(d.getTime())) return "";
+  if (isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("fr-FR", {
     day: "2-digit",
     month: "2-digit",
@@ -59,30 +56,32 @@ export default async function AdminOffersPage({
   const { items, total, pageSize } = await listOffers({ status, q, page });
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  // Compute offer:restore capability for the current principal — passed to
-  // LifecycleButtons so the Restaurer button only shows for SUPER_ADMIN and
-  // FANTOMAS. ADMIN does not see it. The Server Action also enforces
-  // requireCapability("offer:restore") server-side — client-side hiding is
-  // UX only.
+  // Compute offer:restore capability for the current principal.
   const principal = await getPrincipal();
   const canRestoreOffer = principal ? can(principal, "offer:restore") : false;
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-bold text-gray-900">Offres</h1>
-        <Link
-          href="/admin/offres/nouvelles"
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
-          Nouvelle offre
-        </Link>
-      </div>
+      {/* Page header */}
+      <AdminPageHeader
+        title="Offres"
+        description="Gérez les offres d'emploi publiées sur JOURDAIN."
+        action={
+          <Link
+            href="/admin/offres/nouvelles"
+            className="btn-primary"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Nouvelle offre
+          </Link>
+        }
+      />
 
-      {/* Filters */}
-      <div className="mb-4 flex flex-wrap items-end gap-3">
+      {/* Filters — cohesive row on desktop, stacked on mobile */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        {/* Status filter */}
         <form action="/admin/offres" method="GET" className="flex flex-col">
-          <label className="mb-1 block text-xs font-medium text-gray-600">
+          <label className="mb-1 block text-xs font-medium text-text-secondary">
             Statut
           </label>
           <div className="flex gap-2">
@@ -90,7 +89,7 @@ export default async function AdminOffersPage({
               key={`status-${status ?? ""}`}
               defaultValue={status ?? ""}
               name="status"
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="form-input !w-auto"
             >
               <option value="">Tous</option>
               {STATUS_OPTIONS.map((s) => (
@@ -99,59 +98,56 @@ export default async function AdminOffersPage({
                 </option>
               ))}
             </select>
-            {q && (
-              <input type="hidden" name="q" value={q} />
-            )}
-            <button
-              type="submit"
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
+            {q && <input type="hidden" name="q" value={q} />}
+            <button type="submit" className="btn-secondary !px-3 !py-2 !text-sm">
               Filtrer
             </button>
           </div>
         </form>
-        <form className="flex-1 min-w-[200px]" action="/admin/offres" method="GET" role="search">
-          <label className="mb-1 block text-xs font-medium text-gray-600">
+
+        {/* Title search */}
+        <form className="flex flex-1 flex-col sm:min-w-[200px]" action="/admin/offres" method="GET" role="search">
+          <label className="mb-1 block text-xs font-medium text-text-secondary" htmlFor="admin-offer-search">
             Recherche par titre
           </label>
           <div className="flex gap-2">
             <input
+              id="admin-offer-search"
               key={`q-${q ?? ""}`}
               type="text"
               name="q"
               defaultValue={q ?? ""}
               placeholder="Rechercher…"
-              className="flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="form-input"
             />
-            <button
-              type="submit"
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
+            <button type="submit" className="btn-secondary !px-3 !py-2 !text-sm">
               Filtrer
             </button>
-            {(q || status) && (
-              <Link
-                href="/admin/offres"
-                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Réinitialiser
-              </Link>
-            )}
           </div>
         </form>
+
+        {/* Reset */}
+        {(q || status) && (
+          <Link
+            href="/admin/offres"
+            className="btn-ghost !px-3 !py-2 !text-sm self-end"
+          >
+            Réinitialiser
+          </Link>
+        )}
       </div>
 
-      {/* List */}
+      {/* List / empty state */}
       {items.length === 0 ? (
-        <div className="rounded-md border border-gray-200 bg-white p-8 text-center text-gray-500">
+        <div className="card-surface p-8 text-center text-text-secondary">
           {total === 0
-            ? "Aucune offre disponible"
-            : "Aucune offre ne correspond à votre filtre"}
+            ? "Aucune offre ne correspond à vos critères."
+            : "Aucune offre disponible."}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-md border border-gray-200 bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
               <tr>
                 <th className="px-4 py-3 font-medium">Titre</th>
                 <th className="px-4 py-3 font-medium">Entreprise</th>
@@ -162,32 +158,32 @@ export default async function AdminOffersPage({
                 <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody>
               {items.map((offer) => (
-                <tr key={offer.id} className="hover:bg-gray-50">
+                <tr key={offer.id}>
                   <td className="px-4 py-3">
                     <Link
                       href={`/admin/offres/${offer.id}`}
-                      className="font-medium text-blue-600 hover:text-blue-800"
+                      className="font-medium text-brand-primary hover:text-brand-primary-hover"
                     >
                       {offer.title}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-gray-700">
+                  <td className="px-4 py-3 text-text-secondary">
                     {offer.company || (
-                      <span className="text-gray-400">—</span>
+                      <span className="text-text-secondary/50">—</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={offer.status} />
                   </td>
-                  <td className="px-4 py-3 text-gray-700">
+                  <td className="px-4 py-3 text-text-secondary">
                     {formatDate(offer.publishedAt)}
                   </td>
-                  <td className="px-4 py-3 text-gray-700">
+                  <td className="px-4 py-3 text-text-secondary">
                     {formatDate(offer.applicationDeadline)}
                   </td>
-                  <td className="px-4 py-3 text-gray-700">
+                  <td className="px-4 py-3 text-text-secondary">
                     {formatDate(offer.updatedAt)}
                   </td>
                   <td className="px-4 py-3">
@@ -203,7 +199,7 @@ export default async function AdminOffersPage({
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="mt-4 flex items-center justify-between text-sm">
-          <span className="text-gray-600">
+          <span className="text-text-secondary">
             {total} offre{total > 1 ? "s" : ""} — page {page} / {totalPages}
           </span>
           <div className="flex gap-2">
@@ -214,7 +210,7 @@ export default async function AdminOffersPage({
                   ...(q ? { q } : {}),
                   page: String(page - 1),
                 }).toString()}`}
-                className="rounded-md border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-gray-50"
+                className="btn-secondary !px-3 !py-1.5 !text-sm"
               >
                 Précédent
               </Link>
@@ -226,7 +222,7 @@ export default async function AdminOffersPage({
                   ...(q ? { q } : {}),
                   page: String(page + 1),
                 }).toString()}`}
-                className="rounded-md border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-gray-50"
+                className="btn-secondary !px-3 !py-1.5 !text-sm"
               >
                 Suivant
               </Link>

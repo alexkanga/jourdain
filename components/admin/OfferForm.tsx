@@ -3,27 +3,34 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TiptapEditor } from "./TiptapEditor";
+import { StatusBadge } from "./StatusBadge";
 import {
   createOfferAction,
   updateOfferAction,
 } from "@/app/admin/(protected)/offres/actions";
+import type { OfferStatus } from "@/lib/server/services/offers";
 
 /**
  * OfferForm — admin create/edit form for an offer.
  *
- * 16 ADMIN-editable fields grouped per S6 §25:
- * - Informations principales: title (required), company, sector, category
- * - Caractéristiques: contract_type, education_level, experience, location
- * - Dates: source_publication_date, application_deadline
- * - Description: Tiptap rich-text editor (required)
- * - Candidature: application_modalities, application_email, application_url
- * - Source: source_name, source_url
+ * UI-03: migrated to Methodist design tokens. Field grouping per UI-03
+ * spec sections. Uses global .form-input and .form-section classes.
+ *
+ * 16 ADMIN-editable fields grouped per S6 §25 + UI-03 reorganization:
+ * 1. Informations principales: title (required), company, sector, category
+ * 2. Profil recherché: education_level, experience
+ * 3. Localisation et contrat: location, contract_type
+ * 4. Dates: source_publication_date, application_deadline
+ * 5. Source et candidature: source_name, source_url, application_modalities,
+ *    application_email, application_url
+ * 6. Description: Tiptap rich-text editor (required)
  *
  * System-managed fields (id, status, published_at, created_at, updated_at)
  * are NOT editable inputs. status is shown as a read-only badge (in edit mode).
  *
- * Client-side validation mirrors server Zod for UX only. The server is the
- * authority.
+ * Field names, form semantics, and server action contracts are UNCHANGED.
+ * E2e selectors preserved: getByLabel(/titre/i), [contenteditable='true'],
+ * getByRole("button", { name: /enregistrer|sauvegarder|save/i }).
  */
 
 type OfferFormProps = {
@@ -53,29 +60,19 @@ type OfferFormProps = {
   };
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  DRAFT: "Brouillon",
-  PUBLISHED: "Publiée",
-  SUSPENDED: "Suspendue",
-  ARCHIVED: "Archivée",
-};
-
-const STATUS_CLASSES: Record<string, string> = {
-  DRAFT: "bg-gray-100 text-gray-800",
-  PUBLISHED: "bg-green-100 text-green-800",
-  SUSPENDED: "bg-amber-100 text-amber-800",
-  ARCHIVED: "bg-red-100 text-red-800",
-};
-
 function toDateInput(value?: string | null): string {
   if (!value) return "";
-  // source_publication_date/application_deadline are stored as date (YYYY-MM-DD);
-  // published_at/created_at/updated_at are timestamptz (ISO string). We only show
-  // date inputs for the ADMIN-entered date fields.
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const d = new Date(value);
   if (isNaN(d.getTime())) return "";
   return d.toISOString().slice(0, 10);
+}
+
+function formatDate(value?: Date | string | null): string {
+  if (!value) return "—";
+  const d = typeof value === "string" ? new Date(value) : value;
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("fr-FR");
 }
 
 export function OfferForm({ mode, offer }: OfferFormProps) {
@@ -88,8 +85,6 @@ export function OfferForm({ mode, offer }: OfferFormProps) {
     setSubmitting(true);
     setError(null);
     const fd = new FormData(e.currentTarget);
-    // The hidden input "description" is filled by TiptapEditor.onUpdate via DOM.
-    // FormData reads the current DOM value at submit time.
     if (mode === "edit" && offer) {
       fd.set("id", offer.id);
     }
@@ -102,24 +97,21 @@ export function OfferForm({ mode, offer }: OfferFormProps) {
       setError(r.error);
       return;
     }
-    // Redirect to admin offers list on success
     router.push("/admin/offres");
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
-        <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+        <div className="rounded-sm border border-danger bg-danger-surface p-3 text-sm text-danger" role="alert">
           {error}
         </div>
       )}
 
-      {/* Informations principales */}
-      <fieldset className="rounded-md border border-gray-200 p-4">
-        <legend className="px-1 text-sm font-semibold text-gray-700">
-          Informations principales
-        </legend>
-        <div className="mt-2 space-y-4">
+      {/* 1. Informations principales */}
+      <fieldset className="form-section">
+        <legend className="px-1">Informations principales</legend>
+        <div className="mt-3 space-y-4">
           <Field label="Titre" required>
             <input
               name="title"
@@ -143,33 +135,36 @@ export function OfferForm({ mode, offer }: OfferFormProps) {
         </div>
       </fieldset>
 
-      {/* Caractéristiques */}
-      <fieldset className="rounded-md border border-gray-200 p-4">
-        <legend className="px-1 text-sm font-semibold text-gray-700">
-          Caractéristiques
-        </legend>
-        <div className="mt-2 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="Type de contrat">
-            <input name="contractType" type="text" defaultValue={offer?.contractType ?? ""} className="form-input" />
-          </Field>
+      {/* 2. Profil recherché */}
+      <fieldset className="form-section">
+        <legend className="px-1">Profil recherché</legend>
+        <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label="Niveau d'étude">
             <input name="educationLevel" type="text" defaultValue={offer?.educationLevel ?? ""} className="form-input" />
           </Field>
           <Field label="Expérience">
             <input name="experience" type="text" defaultValue={offer?.experience ?? ""} className="form-input" />
           </Field>
-          <Field label="Localisation">
+        </div>
+      </fieldset>
+
+      {/* 3. Localisation et contrat */}
+      <fieldset className="form-section">
+        <legend className="px-1">Localisation et contrat</legend>
+        <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field label="Lieu">
             <input name="location" type="text" defaultValue={offer?.location ?? ""} className="form-input" />
+          </Field>
+          <Field label="Type de contrat">
+            <input name="contractType" type="text" defaultValue={offer?.contractType ?? ""} className="form-input" />
           </Field>
         </div>
       </fieldset>
 
-      {/* Dates */}
-      <fieldset className="rounded-md border border-gray-200 p-4">
-        <legend className="px-1 text-sm font-semibold text-gray-700">
-          Dates
-        </legend>
-        <div className="mt-2 grid grid-cols-1 gap-4 md:grid-cols-2">
+      {/* 4. Dates */}
+      <fieldset className="form-section">
+        <legend className="px-1">Dates</legend>
+        <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label="Date de publication source">
             <input
               name="sourcePublicationDate"
@@ -189,29 +184,18 @@ export function OfferForm({ mode, offer }: OfferFormProps) {
         </div>
       </fieldset>
 
-      {/* Description */}
-      <fieldset className="rounded-md border border-gray-200 p-4">
-        <legend className="px-1 text-sm font-semibold text-gray-700">
-          Description <span className="text-red-600">*</span>
-        </legend>
-        <div className="mt-2">
-          <TiptapEditor
-            name="description"
-            initialContent={
-              offer?.description
-                ? (offer.description as object)
-                : null
-            }
-          />
-        </div>
-      </fieldset>
-
-      {/* Candidature */}
-      <fieldset className="rounded-md border border-gray-200 p-4">
-        <legend className="px-1 text-sm font-semibold text-gray-700">
-          Candidature (informationnel uniquement)
-        </legend>
-        <div className="mt-2 space-y-4">
+      {/* 5. Source et candidature */}
+      <fieldset className="form-section">
+        <legend className="px-1">Source et candidature</legend>
+        <div className="mt-3 space-y-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field label="Nom de la source">
+              <input name="sourceName" type="text" defaultValue={offer?.sourceName ?? ""} className="form-input" />
+            </Field>
+            <Field label="URL de la source">
+              <input name="sourceUrl" type="url" defaultValue={offer?.sourceUrl ?? ""} className="form-input" />
+            </Field>
+          </div>
           <Field label="Modalités de candidature">
             <textarea
               name="applicationModalities"
@@ -231,45 +215,39 @@ export function OfferForm({ mode, offer }: OfferFormProps) {
         </div>
       </fieldset>
 
-      {/* Source */}
-      <fieldset className="rounded-md border border-gray-200 p-4">
-        <legend className="px-1 text-sm font-semibold text-gray-700">
-          Source
+      {/* 6. Description */}
+      <fieldset className="form-section">
+        <legend className="px-1">
+          Description de l&apos;offre <span className="text-danger">*</span>
         </legend>
-        <div className="mt-2 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="Nom de la source">
-            <input name="sourceName" type="text" defaultValue={offer?.sourceName ?? ""} className="form-input" />
-          </Field>
-          <Field label="URL de la source">
-            <input name="sourceUrl" type="url" defaultValue={offer?.sourceUrl ?? ""} className="form-input" />
-          </Field>
+        <div className="mt-3">
+          <TiptapEditor
+            name="description"
+            initialContent={
+              offer?.description
+                ? (offer.description as object)
+                : null
+            }
+          />
         </div>
       </fieldset>
 
       {/* Edit-mode read-only system-managed fields */}
       {mode === "edit" && offer && (
-        <fieldset className="rounded-md border border-gray-200 bg-gray-50 p-4">
-          <legend className="px-1 text-sm font-semibold text-gray-700">
-            Champs gérés par le système (lecture seule)
-          </legend>
-          <div className="mt-2 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <fieldset className="form-section bg-surface-muted">
+          <legend className="px-1">Champs gérés par le système (lecture seule)</legend>
+          <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
-              <p className="mb-1 text-xs font-medium text-gray-600">Statut</p>
-              <span className={`inline-flex rounded px-2 py-1 text-xs font-medium ${STATUS_CLASSES[offer.status] ?? "bg-gray-100 text-gray-800"}`}>
-                {STATUS_LABELS[offer.status] ?? offer.status}
-              </span>
+              <p className="mb-1 text-xs font-medium text-text-secondary">Statut</p>
+              <StatusBadge status={offer.status as OfferStatus} />
             </div>
             <div>
-              <p className="mb-1 text-xs font-medium text-gray-600">Publiée le</p>
-              <p className="text-sm text-gray-700">
-                {offer.publishedAt ? new Date(offer.publishedAt).toLocaleDateString("fr-FR") : "—"}
-              </p>
+              <p className="mb-1 text-xs font-medium text-text-secondary">Publiée le</p>
+              <p className="text-sm text-text-primary">{formatDate(offer.publishedAt)}</p>
             </div>
             <div>
-              <p className="mb-1 text-xs font-medium text-gray-600">Créée le</p>
-              <p className="text-sm text-gray-700">
-                {offer.createdAt ? new Date(offer.createdAt).toLocaleDateString("fr-FR") : "—"}
-              </p>
+              <p className="mb-1 text-xs font-medium text-text-secondary">Créée le</p>
+              <p className="text-sm text-text-primary">{formatDate(offer.createdAt)}</p>
             </div>
           </div>
         </fieldset>
@@ -280,7 +258,7 @@ export function OfferForm({ mode, offer }: OfferFormProps) {
         <button
           type="submit"
           disabled={submitting}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+          className="btn-primary"
         >
           {submitting
             ? "Enregistrement…"
@@ -291,29 +269,11 @@ export function OfferForm({ mode, offer }: OfferFormProps) {
         <button
           type="button"
           onClick={() => router.push("/admin/offres")}
-          className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          className="btn-secondary"
         >
           Annuler
         </button>
       </div>
-
-      <style jsx>{`
-        :global(.form-input) {
-          display: block;
-          width: 100%;
-          border-radius: 0.375rem;
-          border: 1px solid #d1d5db;
-          padding: 0.5rem 0.75rem;
-          font-size: 0.875rem;
-          color: #111827;
-          background: #fff;
-        }
-        :global(.form-input:focus) {
-          outline: none;
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 1px #3b82f6;
-        }
-      `}</style>
     </form>
   );
 }
@@ -329,8 +289,8 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm font-medium text-gray-700">
-        {label} {required && <span className="text-red-600">*</span>}
+      <span className="mb-1 block text-sm font-medium text-text-primary">
+        {label} {required && <span className="text-danger">*</span>}
       </span>
       {children}
     </label>

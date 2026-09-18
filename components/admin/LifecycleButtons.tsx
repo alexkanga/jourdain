@@ -13,24 +13,19 @@ import type { OfferStatus } from "@/lib/server/services/offers";
 /**
  * LifecycleButtons — admin action buttons for an offer row in the list.
  *
+ * UI-03: migrated to Methodist button variants. Labels + behavior
+ * unchanged. Archive confirmation remains native window.confirm.
+ *
  * Actions depend on current status AND the caller's capabilities:
- * - DRAFT:     Publier, Archiver
- * - PUBLISHED: Suspendre, Archiver
- * - SUSPENDED: Republier, Archiver
- * - ARCHIVED:  Restaurer (only if canRestoreOffer — SUPER_ADMIN/FANTOMAS)
+ * - DRAFT:     Publier (primary green), Archiver (secondary)
+ * - PUBLISHED: Suspendre (warning amber), Archiver (secondary)
+ * - SUSPENDED: Republier (primary green), Archiver (secondary)
+ * - ARCHIVED:  Restaurer (gold) — only if canRestoreOffer (SUPER_ADMIN/FANTOMAS)
  *
- * Per user-management work package, offer:restore moved from ADMIN to
- * SUPER_ADMIN. The `canRestoreOffer` prop is computed server-side from the
- * current principal's capabilities (can(principal, "offer:restore")) and
- * passed down. ADMIN sees no Restaurer button; SUPER_ADMIN and FANTOMAS do.
+ * Per user-management final correction: ADMIN does NOT see Restaurer.
+ * Server-side restoreOfferAction enforces requireCapability("offer:restore").
  *
- * Archive requires an explicit confirmation dialog (window.confirm) to
- * prevent accidental archiving.
- *
- * Client-side hiding is UX ONLY — does NOT authorize. Server-side
- * requireCapability("offer:restore") + lifecycle state validation are
- * the authority. An ADMIN who somehow invokes restoreOfferAction directly
- * (e.g., via devtools) will be denied by requireCapability.
+ * Client-side hiding is UX ONLY — does NOT authorize.
  */
 
 const ARCHIVE_CONFIRM_MESSAGE =
@@ -53,30 +48,40 @@ export function LifecycleButtons({
 }) {
   const [pending, startTransition] = useTransition();
 
-  const buttons: { label: string; action: (fd: FormData) => Promise<unknown>; variant: string; confirm?: boolean }[] = [];
+  const buttons: { label: string; action: (fd: FormData) => Promise<unknown>; className: string; confirm?: boolean }[] = [];
   if (status === "DRAFT") {
-    buttons.push({ label: "Publier", action: publishOfferAction, variant: "bg-green-600 hover:bg-green-700 text-white font-semibold shadow-sm" });
+    buttons.push({
+      label: "Publier",
+      action: publishOfferAction,
+      className: "btn-primary !px-3 !py-1 !text-xs",
+    });
   }
   if (status === "PUBLISHED") {
-    buttons.push({ label: "Suspendre", action: suspendOfferAction, variant: "bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-sm" });
+    buttons.push({
+      label: "Suspendre",
+      action: suspendOfferAction,
+      className: "btn-warning !px-3 !py-1 !text-xs",
+    });
   }
   if (status === "SUSPENDED") {
-    buttons.push({ label: "Republier", action: republishOfferAction, variant: "bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm" });
+    buttons.push({
+      label: "Republier",
+      action: republishOfferAction,
+      className: "btn-primary !px-3 !py-1 !text-xs",
+    });
   }
   if (status === "ARCHIVED" && canRestoreOffer) {
-    // Restaurer is only shown to principals with offer:restore capability
-    // (SUPER_ADMIN and FANTOMAS). ADMIN sees no Restaurer button.
     buttons.push({
       label: "Restaurer",
       action: restoreOfferAction,
-      variant: "border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 font-semibold shadow-sm",
+      className: "btn-gold !px-3 !py-1 !text-xs",
     });
   }
   if (status !== "ARCHIVED") {
     buttons.push({
       label: "Archiver",
       action: archiveOfferAction,
-      variant: "border border-gray-300 text-gray-700 hover:bg-gray-50",
+      className: "btn-secondary !px-3 !py-1 !text-xs",
       confirm: true,
     });
   }
@@ -84,7 +89,7 @@ export function LifecycleButtons({
   if (buttons.length === 0) {
     // ARCHIVED + ADMIN (no restore capability) → no buttons.
     return (
-      <span className="text-xs text-gray-400">Aucune action (archivée)</span>
+      <span className="text-xs text-text-secondary/60">Aucune action (archivée)</span>
     );
   }
 
@@ -108,7 +113,7 @@ export function LifecycleButtons({
           <button
             type="submit"
             disabled={pending}
-            className={`rounded-md px-3 py-1 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 ${b.variant}`}
+            className={`${b.className} disabled:opacity-50`}
           >
             {pending ? "…" : b.label}
           </button>

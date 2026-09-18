@@ -6,7 +6,8 @@ import { deleteUserAction } from "./actions";
 /**
  * DeleteUserButton — client-side button that invokes deleteUserAction.
  *
- * Shows a window.confirm() with the target username before deletion.
+ * UI-03: migrated to Methodist tokens (btn-danger variant).
+ * Behavior unchanged — native window.confirm, Server Action.
  *
  * Self-delete is blocked at the service layer (caller.id === id → reject)
  * even if the button were somehow shown. We hide the button entirely when
@@ -17,6 +18,9 @@ import { deleteUserAction } from "./actions";
  *     page that renders this button already gated by user:list capability).
  *   - The Server Action enforces requireCapability("user:delete") again
  *     server-side — client-side hiding is UX only.
+ *
+ * E2e selectors preserved: getByRole("button", { name: /supprimer/i }).
+ * The native window.confirm dialog is preserved for Playwright's dialog handler.
  */
 
 export function DeleteUserButton({
@@ -35,7 +39,7 @@ export function DeleteUserButton({
     // layer would reject anyway, but UX should reflect this.
     return (
       <span
-        className="cursor-not-allowed rounded-md border border-gray-200 px-3 py-1 text-xs font-medium text-gray-400"
+        className="cursor-not-allowed rounded-sm border border-border px-3 py-1 text-xs font-medium text-text-secondary/40"
         title="Vous ne pouvez pas supprimer votre propre compte"
       >
         Supprimer
@@ -53,8 +57,6 @@ export function DeleteUserButton({
       fd.set("id", userId);
       const result = await deleteUserAction(fd);
       if (!result.ok) {
-        // The page will re-render after revalidatePath; surface the error
-        // via alert for the user (simple — no toast framework in V1).
         alert(result.error);
       }
     });
@@ -65,7 +67,7 @@ export function DeleteUserButton({
       type="button"
       disabled={pending}
       onClick={() => startTransition(handleDelete)}
-      className="rounded-md border border-red-300 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 disabled:opacity-50"
+      className="btn-danger !px-3 !py-1 !text-xs"
     >
       {pending ? "…" : "Supprimer"}
     </button>

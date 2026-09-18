@@ -8,13 +8,17 @@ import { useEffect } from "react";
 /**
  * TiptapEditor — minimal V1 Tiptap editor for the admin offer form.
  *
+ * UI-03: improved visual frame — toolbar separation, content area,
+ * minimum height, focus state, Methodist tokens. Behavior and JSON
+ * storage UNCHANGED.
+ *
  * V1 subset (per WP-003 contract): paragraphs, headings 1-3, bullet lists,
  * ordered lists, links, bold, italic. No images, tables, code blocks, embeds.
  *
  * Canonical storage: Tiptap JSON → PostgreSQL JSONB (schema column is jsonb
  * from WP-002). No raw HTML storage; no dangerouslySetInnerHTML.
  *
- * Public rendering belongs to WP-004 (Tiptap server-side renderer).
+ * E2e selectors preserved: [contenteditable='true'], hidden name="description".
  */
 
 export type TiptapEditorProps = {
@@ -27,7 +31,6 @@ export function TiptapEditor({ name, initialContent, onChange }: TiptapEditorPro
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        // Disable nodes outside the V1 subset:
         codeBlock: false,
         blockquote: false,
         horizontalRule: false,
@@ -41,7 +44,6 @@ export function TiptapEditor({ name, initialContent, onChange }: TiptapEditorPro
     onUpdate: ({ editor }) => {
       const json = editor.getJSON();
       if (onChange) onChange(json);
-      // Persist JSON to a hidden input that React Hook Form submits with the form.
       const hidden = document.querySelector(`input[name="${name}"]`) as HTMLInputElement | null;
       if (hidden) hidden.value = JSON.stringify(json);
     },
@@ -56,7 +58,7 @@ export function TiptapEditor({ name, initialContent, onChange }: TiptapEditorPro
   if (!editor) return null;
 
   return (
-    <div className="rounded-md border border-gray-300">
+    <div className="overflow-hidden rounded-sm border border-border-strong transition-colors duration-fast focus-within:border-brand-primary focus-within:ring-1 focus-within:ring-brand-primary">
       {/* Hidden input holds the Tiptap JSON for form submission */}
       <input
         type="hidden"
@@ -64,7 +66,7 @@ export function TiptapEditor({ name, initialContent, onChange }: TiptapEditorPro
         defaultValue={initialContent ? JSON.stringify(initialContent) : ""}
       />
       {/* Toolbar — V1 subset only */}
-      <div className="flex flex-wrap gap-1 border-b border-gray-200 bg-gray-50 p-2">
+      <div className="flex flex-wrap gap-1 border-b border-border bg-surface-muted p-2">
         <ToolbarButton
           active={editor.isActive("bold")}
           onClick={() => editor.chain().focus().toggleBold().run()}
@@ -117,7 +119,7 @@ export function TiptapEditor({ name, initialContent, onChange }: TiptapEditorPro
           label="Lien"
         />
       </div>
-      <EditorContent editor={editor} className="prose prose-sm max-w-none p-3 min-h-[200px]" />
+      <EditorContent editor={editor} className="prose prose-sm max-w-none p-4 min-h-[240px] focus:outline-none" />
     </div>
   );
 }
@@ -137,7 +139,7 @@ function ToolbarButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded px-2 py-1 text-xs ${active ? "bg-blue-100 text-blue-800" : "text-gray-700 hover:bg-gray-100"} ${className}`}
+      className={`rounded-sm px-2 py-1 text-xs transition-colors duration-fast ${active ? "bg-brand-surface text-brand-primary" : "text-text-secondary hover:bg-surface hover:text-text-primary"} ${className}`}
     >
       {label}
     </button>

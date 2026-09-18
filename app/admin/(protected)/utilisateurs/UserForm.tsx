@@ -8,24 +8,21 @@ import type { ManagedUserRow } from "@/lib/server/services/users";
 /**
  * UserForm — create or edit a managed admin user.
  *
- * Per user-management work package + final correction #2:
- *   - Role options are ADMIN and SUPER_ADMIN ONLY. FANTOMAS is never
- *     accepted as form input (the server-side Zod schema enforces this —
- *     the client dropdown is just UX, not security).
- *   - Password field:
- *       - Create mode: required (min 8 chars) — initial credential.
- *       - Edit mode: NO password field. Password reset is REMOVED from V1
- *         (Better Auth setUserPassword requires admin-session semantics
- *         that don't map cleanly to our independent principal model;
- *         direct hashPassword + account.password update was rejected as
- *         inventing credential-hash manipulation). Edit-user updates
- *         username, email, and role only.
- *   - On success, navigate to /admin/utilisateurs (list).
- *   - On error, display the controlled error message above the form.
+ * UI-03: migrated to Methodist design tokens. Visual hierarchy improved
+ * with .form-section and .form-input classes. Behavior unchanged.
  *
- * The form uses FormData + Server Actions — no client-side credential
- * processing. The initial password (create) is hashed server-side by
- * Better Auth's auth.api.createUser (which uses hashPassword internally).
+ * Per user-management final correction #2:
+ *   - Create mode: password field (initial credential, required).
+ *   - Edit mode: NO password field (password reset removed from V1).
+ *   - Role options: ADMIN, SUPER_ADMIN ONLY. FANTOMAS never accepted.
+ *
+ * E2e selectors preserved:
+ *   - getByLabel(/nom d'utilisateur/i) → htmlFor="username"
+ *   - getByLabel(/^email$/i) → htmlFor="email"
+ *   - getByLabel(/mot de passe/i) → htmlFor="password" (create only)
+ *   - getByLabel(/^rôle$/i) → htmlFor="role" (native <select>)
+ *   - getByRole("button", { name: /créer l'utilisateur/i })
+ *   - getByRole("button", { name: /enregistrer les modifications/i })
  */
 
 const ROLE_OPTIONS = [
@@ -61,8 +58,6 @@ export function UserForm({
         setPending(false);
         return;
       }
-      // Success — navigate to the users list. Full page navigation so the
-      // server re-reads the principal + revalidates the list.
       router.push("/admin/utilisateurs");
       router.refresh();
     } catch {
@@ -74,14 +69,14 @@ export function UserForm({
   return (
     <div>
       <div className="mb-6 flex items-center justify-between gap-3">
-        <h1 className="text-xl font-bold text-gray-900">
+        <h1 className="font-heading text-xl font-bold text-text-primary sm:text-2xl">
           {isCreate ? "Nouvel utilisateur" : "Modifier l'utilisateur"}
         </h1>
       </div>
 
-      <div className="max-w-2xl rounded-md border border-gray-200 bg-white p-6">
+      <div className="max-w-2xl card-surface p-6">
         {error && (
-          <div className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+          <div className="mb-4 rounded-sm border border-danger bg-danger-surface p-3 text-sm text-danger" role="alert">
             {error}
           </div>
         )}
@@ -94,7 +89,7 @@ export function UserForm({
           <div>
             <label
               htmlFor="username"
-              className="mb-1 block text-sm font-medium text-gray-700"
+              className="mb-1 block text-sm font-medium text-text-primary"
             >
               Nom d&apos;utilisateur
             </label>
@@ -104,7 +99,7 @@ export function UserForm({
               type="text"
               required
               defaultValue={user?.username ?? ""}
-              className="block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="form-input"
             />
           </div>
 
@@ -112,7 +107,7 @@ export function UserForm({
           <div>
             <label
               htmlFor="email"
-              className="mb-1 block text-sm font-medium text-gray-700"
+              className="mb-1 block text-sm font-medium text-text-primary"
             >
               Email
             </label>
@@ -122,20 +117,16 @@ export function UserForm({
               type="email"
               required
               defaultValue={user?.email ?? ""}
-              className="block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="form-input"
             />
           </div>
 
-          {/* Mot de passe — CREATE MODE ONLY.
-              Per user-management final correction #2: password reset is
-              REMOVED from V1. The edit-user flow does NOT include a password
-              field. The create flow requires the initial credential, which
-              is hashed server-side by Better Auth's auth.api.createUser. */}
+          {/* Mot de passe — CREATE MODE ONLY */}
           {isCreate && (
             <div>
               <label
                 htmlFor="password"
-                className="mb-1 block text-sm font-medium text-gray-700"
+                className="mb-1 block text-sm font-medium text-text-primary"
               >
                 Mot de passe initial
               </label>
@@ -145,9 +136,9 @@ export function UserForm({
                 type="password"
                 required
                 minLength={8}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="form-input"
               />
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-text-secondary">
                 Au moins 8 caractères
               </p>
             </div>
@@ -157,7 +148,7 @@ export function UserForm({
           <div>
             <label
               htmlFor="role"
-              className="mb-1 block text-sm font-medium text-gray-700"
+              className="mb-1 block text-sm font-medium text-text-primary"
             >
               Rôle
             </label>
@@ -166,7 +157,7 @@ export function UserForm({
               name="role"
               required
               defaultValue={user?.principalType ?? "ADMIN"}
-              className="block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="form-input"
             >
               {ROLE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -174,7 +165,7 @@ export function UserForm({
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-text-secondary">
               FANTOMAS n&apos;est pas assignable depuis l&apos;interface.
             </p>
           </div>
@@ -184,7 +175,7 @@ export function UserForm({
             <button
               type="submit"
               disabled={pending}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+              className="btn-primary"
             >
               {pending
                 ? "Enregistrement…"
@@ -196,7 +187,7 @@ export function UserForm({
               type="button"
               onClick={() => router.push("/admin/utilisateurs")}
               disabled={pending}
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+              className="btn-secondary"
             >
               Annuler
             </button>

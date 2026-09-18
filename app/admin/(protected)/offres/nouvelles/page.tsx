@@ -1,19 +1,17 @@
 import { OfferForm } from "@/components/admin/OfferForm";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 
 /**
- * New offer form page — /admin/offres/nouvelles
+ * Create offer page — /admin/offres/nouvelles
  *
- * Server-side auth guard: app/admin/layout.tsx validates authenticated
- * session via getPrincipal() before this page renders.
- *
- * The form saves the new offer as DRAFT (BR-021 save ≠ publish; createOfferAction
- * always sets status='DRAFT', published_at=NULL).
+ * UI-03: migrated to Methodist tokens. AdminPageHeader replaces inline h1.
+ * createOfferAction always saves as DRAFT (BR-021 save ≠ publish).
  */
 
-export default function NewOfferPage() {
+export default async function CreateOfferPage() {
   return (
     <div>
-      <h1 className="mb-6 text-xl font-bold text-gray-900">Nouvelle offre</h1>
+      <AdminPageHeader title="Nouvelle offre" />
       <OfferForm mode="create" />
     </div>
   );
