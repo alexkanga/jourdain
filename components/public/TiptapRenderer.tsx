@@ -82,7 +82,7 @@ function renderMarks(text: string, marks?: { type: string; attrs?: Record<string
         }
         if (href.startsWith("mailto:")) {
           result = (
-            <a href={href} key={mark.type}>
+            <a href={href} key={mark.type} className="text-brand-primary underline decoration-brand-primary/30 underline-offset-2 hover:decoration-brand-primary">
               {result}
             </a>
           );
@@ -93,6 +93,7 @@ function renderMarks(text: string, marks?: { type: string; attrs?: Record<string
               target="_blank"
               rel="noopener noreferrer"
               key={mark.type}
+              className="text-brand-primary underline decoration-brand-primary/30 underline-offset-2 hover:decoration-brand-primary"
             >
               {result}
             </a>
@@ -114,25 +115,25 @@ function renderNode(node: TiptapNode, key: number): React.ReactNode {
       return <div key={key}>{node.content?.map((child, i) => renderNode(child, i))}</div>;
 
     case "paragraph":
-      return <p key={key} className="mb-3 leading-relaxed">{node.content?.map((child, i) => renderInline(child, i))}</p>;
+      return <p key={key} className="mb-4 leading-relaxed text-text-primary">{node.content?.map((child, i) => renderInline(child, i))}</p>;
 
     case "heading": {
       const level = (node.attrs?.level as number) ?? 1;
       const Tag = (`h${Math.min(Math.max(level, 1), 3)}`) as "h1" | "h2" | "h3";
       const sizeClass = level === 1 ? "text-xl" : level === 2 ? "text-lg" : "text-base";
-      return <Tag key={key} className={`mt-4 mb-2 font-bold ${sizeClass}`}>{node.content?.map((child, i) => renderInline(child, i))}</Tag>;
+      return <Tag key={key} className={`mt-6 mb-3 font-heading font-bold text-text-primary ${sizeClass}`}>{node.content?.map((child, i) => renderInline(child, i))}</Tag>;
     }
 
     case "bulletList":
       return (
-        <ul key={key} className="mb-3 list-disc pl-6 space-y-1">
+        <ul key={key} className="mb-4 list-disc space-y-1.5 pl-6 text-text-primary">
           {node.content?.map((child, i) => renderNode(child, i))}
         </ul>
       );
 
     case "orderedList":
       return (
-        <ol key={key} className="mb-3 list-decimal pl-6 space-y-1">
+        <ol key={key} className="mb-4 list-decimal space-y-1.5 pl-6 text-text-primary">
           {node.content?.map((child, i) => renderNode(child, i))}
         </ol>
       );

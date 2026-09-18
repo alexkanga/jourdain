@@ -1,22 +1,26 @@
 import Link from "next/link";
+import { Search, X } from "lucide-react";
 import { listPublishedOffers } from "@/lib/server/services/public-offers";
 import { OfferCard } from "@/components/public/OfferCard";
+import { PublicHero } from "@/components/public/PublicHero";
+import { PublicEmptyState } from "@/components/public/PublicEmptyState";
 import type { Metadata } from "next";
 
 /**
  * Public offer list — root URL `/` (FR-040).
  *
- * Displays PUBLISHED offers sorted by published_at DESC, created_at DESC.
- * Server-side PUBLISHED-only filtering (BR-025).
- * Search via ?q= (FR-050 SHOULD, ADR-0010).
- * Pagination: simple page-based server-side (FR-040).
- * Empty state: "Aucune offre disponible actuellement" (FR-060).
+ * UI-02 refresh: hero + prominent search panel + responsive card grid
+ * + redesigned pagination. Existing query semantics unchanged:
+ *   - PUBLISHED-only filter (BR-025)
+ *   - Search via ?q= on title/company/location (FR-050, ADR-0010)
+ *   - Pagination: 12 per page, server-side (FR-040)
+ *   - Ordering: published_at DESC, created_at DESC (BR-070, BR-071)
  *
  * NO authentication required (PERM-001).
  */
 
 export const metadata: Metadata = {
-  title: "JOURDAIN EMPLOI — Offres d'emploi",
+  title: "Offres d'emploi",
   description: "Consultez les offres d'emploi publiées sur JOURDAIN EMPLOI.",
 };
 
@@ -31,77 +35,140 @@ export default async function PublicListPage({
 
   const { items, total, pageSize } = await listPublishedOffers({ q, page });
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const hasQuery = !!q;
+
+  // Build pagination URLs preserving the query parameter
+  function pageHref(p: number): string {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    params.set("page", String(p));
+    return `/?${params.toString()}`;
+  }
+
+  // Section heading depends on whether there's an active search
+  const sectionHeading = hasQuery ? "Résultats de recherche" : "Offres récentes";
+  const sectionSubtitle = hasQuery
+    ? items.length > 0
+      ? `${total} offre${total > 1 ? "s" : ""} trouvée${total > 1 ? "s" : ""} pour « ${q} »`
+      : `Aucune offre trouvée pour « ${q} »`
+    : "Découvrez les dernières opportunités disponibles.";
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
-      <h1 className="text-2xl font-bold text-gray-900">Offres d&apos;emploi</h1>
+    <>
+      {/* ─── Hero ────────────────────────────────────────────────── */}
+      <PublicHero />
 
-      {/* Search */}
-      <form action="/" method="GET" className="mt-4 flex gap-2">
-        <input
-          type="text"
-          name="q"
-          defaultValue={q ?? ""}
-          placeholder="Rechercher par titre, entreprise, lieu…"
-          className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
-        <button
-          type="submit"
-          className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
-          Rechercher
-        </button>
-        {(q || sp.page) && (
-          <Link
-            href="/"
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Réinitialiser
-          </Link>
-        )}
-      </form>
-
-      {/* List */}
-      {items.length === 0 ? (
-        <div className="mt-8 rounded-md border border-gray-200 bg-white p-8 text-center text-gray-500">
-          {q
-            ? "Aucune offre ne correspond à votre recherche."
-            : "Aucune offre disponible actuellement."}
-        </div>
-      ) : (
-        <div className="mt-6 space-y-4">
-          {items.map((offer) => (
-            <OfferCard key={offer.id} offer={offer} />
-          ))}
-        </div>
-      )}
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="mt-6 flex items-center justify-between text-sm">
-          <span className="text-gray-600">
-            {total} offre{total > 1 ? "s" : ""} — page {page} / {totalPages}
-          </span>
-          <div className="flex gap-2">
-            {page > 1 && (
+      {/* ─── Search panel ─────────────────────────────────────────── */}
+      <div className="border-b border-border bg-surface">
+        <div className="mx-auto max-w-public-content px-4 py-6 sm:px-6">
+          <form action="/" method="GET" role="search" className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <label htmlFor="search-input" className="sr-only">
+              Rechercher un poste, une entreprise ou un lieu
+            </label>
+            <div className="relative flex-1">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-text-secondary"
+                aria-hidden="true"
+              />
+              <input
+                id="search-input"
+                type="text"
+                name="q"
+                defaultValue={q ?? ""}
+                placeholder="Rechercher un poste, une entreprise ou un lieu..."
+                className="w-full rounded-sm border border-border-strong bg-surface py-2.5 pl-11 pr-4 text-text-primary placeholder:text-text-secondary focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
+              />
+            </div>
+            <button
+              type="submit"
+              className="btn-primary sm:w-auto"
+            >
+              <Search className="h-4 w-4" aria-hidden="true" />
+              Rechercher
+            </button>
+            {hasQuery && (
               <Link
-                href={`/?${new URLSearchParams({ ...(q ? { q } : {}), page: String(page - 1) }).toString()}`}
-                className="rounded-md border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-gray-50"
+                href="/"
+                className="btn-ghost text-text-secondary hover:text-text-primary"
               >
-                Précédent
+                <X className="h-4 w-4" aria-hidden="true" />
+                Réinitialiser
               </Link>
             )}
-            {page < totalPages && (
-              <Link
-                href={`/?${new URLSearchParams({ ...(q ? { q } : {}), page: String(page + 1) }).toString()}`}
-                className="rounded-md border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-gray-50"
-              >
-                Suivant
-              </Link>
-            )}
+          </form>
+        </div>
+      </div>
+
+      {/* ─── Results section ──────────────────────────────────────── */}
+      <div className="mx-auto max-w-public-content px-4 py-8 sm:px-6">
+        {/* Section heading */}
+        <div className="mb-6">
+          <h2 className="font-heading text-xl font-bold text-text-primary sm:text-2xl">
+            {sectionHeading}
+          </h2>
+          <p className="mt-1 text-sm text-text-secondary">
+            {sectionSubtitle}
+          </p>
+        </div>
+
+        {/* Cards / empty state */}
+        {items.length === 0 ? (
+          hasQuery ? (
+            <PublicEmptyState mode="no-results" searchQuery={q} />
+          ) : (
+            <PublicEmptyState mode="no-offers" />
+          )
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
+            {items.map((offer) => (
+              <OfferCard key={offer.id} offer={offer} />
+            ))}
           </div>
-        </div>
-      )}
-    </div>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <nav className="mt-8 flex items-center justify-between gap-4" aria-label="Pagination">
+            <span className="text-sm text-text-secondary">
+              {total} offre{total > 1 ? "s" : ""} — page {page} / {totalPages}
+            </span>
+            <div className="flex items-center gap-2">
+              {page > 1 ? (
+                <Link
+                  href={pageHref(page - 1)}
+                  className="btn-secondary"
+                  aria-label="Page précédente"
+                >
+                  ← Précédent
+                </Link>
+              ) : (
+                <span
+                  className="btn-secondary cursor-not-allowed opacity-50"
+                  aria-disabled="true"
+                >
+                  ← Précédent
+                </span>
+              )}
+              {page < totalPages ? (
+                <Link
+                  href={pageHref(page + 1)}
+                  className="btn-secondary"
+                  aria-label="Page suivante"
+                >
+                  Suivant →
+                </Link>
+              ) : (
+                <span
+                  className="btn-secondary cursor-not-allowed opacity-50"
+                  aria-disabled="true"
+                >
+                  Suivant →
+                </span>
+              )}
+            </div>
+          </nav>
+        )}
+      </div>
+    </>
   );
 }

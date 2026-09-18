@@ -1,8 +1,15 @@
+import { MapPin, Briefcase, Calendar, Clock } from "lucide-react";
 import { TiptapRenderer } from "./TiptapRenderer";
+import { OfferInfoPanel } from "./OfferInfoPanel";
 import type { PublicOfferRow } from "@/lib/server/services/public-offers";
 
 /**
  * OfferDetail — public offer detail page content.
+ *
+ * Per UI-02 spec: two-column desktop layout (main Tiptap content +
+ * right information panel). Mobile: single-column, info panel stacks
+ * below the main content.
+ *
  * Per S5 §10.2: all available fields, company as "Entreprise non communiquée" if absent,
  * application modalities as informational block (no Apply button), source block if present.
  *
@@ -10,6 +17,8 @@ import type { PublicOfferRow } from "@/lib/server/services/public-offers";
  * (defense in depth). Only http/https URLs are rendered as clickable links.
  * Unsafe values (javascript:, data:, vbscript:, file:, etc.) are silently
  * omitted — no clickable <a> is rendered, no unsafe href is emitted in markup.
+ *
+ * Server Component — no client JS.
  */
 
 function formatDate(value: string | Date | null | undefined): string {
@@ -23,11 +32,6 @@ function formatDate(value: string | Date | null | undefined): string {
   });
 }
 
-/**
- * Render-time URL safety check. Returns a safe http/https URL or null.
- * Defense in depth: even if save-time validation is bypassed (legacy data),
- * unsafe schemes are NOT rendered as clickable links.
- */
 function safeHttpUrl(value: string | null | undefined): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -41,86 +45,102 @@ function safeHttpUrl(value: string | null | undefined): string | null {
 
 export function OfferDetail({ offer }: { offer: PublicOfferRow }) {
   const safeAppUrl = safeHttpUrl(offer.applicationUrl);
-  const safeSourceUrl = safeHttpUrl(offer.sourceUrl);
   const hasApplicationInfo =
     offer.applicationModalities || offer.applicationEmail || safeAppUrl;
-  const hasSourceInfo = offer.sourceName || safeSourceUrl;
 
   return (
-    <article className="max-w-3xl">
-      <h1 className="text-2xl font-bold text-gray-900">{offer.title}</h1>
+    <article>
+      {/* ─── Title area ───────────────────────────────────────────── */}
+      <h1 className="font-heading text-2xl font-bold leading-tight text-text-primary sm:text-3xl">
+        {offer.title}
+      </h1>
 
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
-        <span>{offer.company ? offer.company : "Entreprise non communiquée"}</span>
-        {offer.location && <span>{offer.location}</span>}
-        {offer.contractType && <span>{offer.contractType}</span>}
-      </div>
+      {/* Company */}
+      <p className="mt-2 text-lg text-text-secondary">
+        {offer.company ? offer.company : "Entreprise non communiquée"}
+      </p>
 
-      <div className="mt-4 space-y-1 text-sm text-gray-500">
-        {offer.sector && <div>Secteur : {offer.sector}</div>}
-        {offer.category && <div>Catégorie : {offer.category}</div>}
-        {offer.educationLevel && <div>Formation : {offer.educationLevel}</div>}
-        {offer.experience && <div>Expérience : {offer.experience}</div>}
-      </div>
-
-      <div className="mt-4 space-y-1 text-sm text-gray-500">
-        <div>Publié le {formatDate(offer.publishedAt)}</div>
-        {offer.sourcePublicationDate && (
-          <div>Source : {formatDate(offer.sourcePublicationDate)}</div>
+      {/* Metadata summary — location + contract type */}
+      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-text-secondary">
+        {offer.location && (
+          <span className="flex items-center gap-1.5">
+            <MapPin className="h-4 w-4 shrink-0 text-brand-primary/70" aria-hidden="true" />
+            {offer.location}
+          </span>
+        )}
+        {offer.contractType && (
+          <span className="flex items-center gap-1.5">
+            <Briefcase className="h-4 w-4 shrink-0 text-brand-primary/70" aria-hidden="true" />
+            {offer.contractType}
+          </span>
+        )}
+        {offer.publishedAt && (
+          <span className="flex items-center gap-1.5">
+            <Calendar className="h-4 w-4 shrink-0 text-brand-primary/70" aria-hidden="true" />
+            Publié le {formatDate(offer.publishedAt)}
+          </span>
         )}
         {offer.applicationDeadline && (
-          <div>Échéance : {formatDate(offer.applicationDeadline)}</div>
+          <span className="flex items-center gap-1.5">
+            <Clock className="h-4 w-4 shrink-0 text-brand-gold/70" aria-hidden="true" />
+            Date limite : {formatDate(offer.applicationDeadline)}
+          </span>
         )}
       </div>
 
-      <div className="prose prose-sm mt-6 max-w-none">
-        <TiptapRenderer content={offer.description} />
-      </div>
+      {/* Divider */}
+      <hr className="mt-6 border-border" />
 
-      {hasApplicationInfo && (
-        <div className="mt-8 rounded-lg border border-gray-200 bg-gray-50 p-4">
-          <h2 className="text-sm font-semibold text-gray-700">Modalités de candidature</h2>
-          <div className="mt-2 space-y-2 text-sm text-gray-600">
-            {offer.applicationModalities && <p>{offer.applicationModalities}</p>}
-            {offer.applicationEmail && (
-              <p>
-                Email :{" "}
-                <a href={`mailto:${offer.applicationEmail}`} className="text-blue-600 hover:text-blue-800">
-                  {offer.applicationEmail}
-                </a>
-              </p>
-            )}
-            {safeAppUrl && (
-              <p>
-                <a
-                  href={safeAppUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:text-blue-800"
-                >
-                  Candidater en ligne
-                </a>
-              </p>
-            )}
+      {/* ─── Two-column layout: main content + info panel ─────────── */}
+      <div className="mt-6 flex flex-col gap-8 lg:flex-row">
+        {/* Main content — Tiptap description + application info */}
+        <div className="min-w-0 flex-1 lg:max-w-2xl">
+          {/* Tiptap description — readable prose */}
+          <div className="prose prose-sm max-w-none prose-headings:font-heading prose-headings:text-text-primary prose-p:text-text-primary prose-p:leading-relaxed prose-a:text-brand-primary prose-strong:text-text-primary prose-li:text-text-primary">
+            <TiptapRenderer content={offer.description} />
           </div>
-        </div>
-      )}
 
-      {hasSourceInfo && (
-        <div className="mt-4 text-sm text-gray-500">
-          {offer.sourceName && <span>Source : {offer.sourceName}</span>}
-          {safeSourceUrl && (
-            <a
-              href={safeSourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="ml-2 text-blue-600 hover:text-blue-800"
-            >
-              Voir la source
-            </a>
+          {/* Application modalities — informational only, no Apply button */}
+          {hasApplicationInfo && (
+            <div className="mt-8 rounded-lg border border-border bg-surface-muted p-5">
+              <h2 className="font-heading text-sm font-semibold uppercase tracking-wide text-text-primary">
+                Modalités de candidature
+              </h2>
+              <div className="mt-3 space-y-2 text-sm text-text-secondary">
+                {offer.applicationModalities && <p>{offer.applicationModalities}</p>}
+                {offer.applicationEmail && (
+                  <p>
+                    Email :{" "}
+                    <a
+                      href={`mailto:${offer.applicationEmail}`}
+                      className="text-brand-primary transition-colors duration-fast hover:text-brand-primary-hover"
+                    >
+                      {offer.applicationEmail}
+                    </a>
+                  </p>
+                )}
+                {safeAppUrl && (
+                  <p>
+                    <a
+                      href={safeAppUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-brand-primary transition-colors duration-fast hover:text-brand-primary-hover"
+                    >
+                      Candidater en ligne
+                    </a>
+                  </p>
+                )}
+              </div>
+            </div>
           )}
         </div>
-      )}
+
+        {/* Info panel — right sidebar on desktop, below on mobile */}
+        <div className="lg:w-80 lg:shrink-0">
+          <OfferInfoPanel offer={offer} />
+        </div>
+      </div>
     </article>
   );
 }

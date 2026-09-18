@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { getPublishedOfferById } from "@/lib/server/services/public-offers";
 import { OfferDetail } from "@/components/public/OfferDetail";
 import type { Metadata } from "next";
@@ -7,9 +8,11 @@ import type { Metadata } from "next";
 /**
  * Public offer detail — /offres/{uuid} (FR-041, FR-042, ADR-0009).
  *
- * Server-side: WHERE id = {uuid} AND status = 'PUBLISHED'.
- * Non-PUBLISHED or nonexistent → notFound() (FR-042: no status/existence leak).
- * Malformed UUID → notFound() before DB query.
+ * UI-02 refresh: back link + two-column layout (main Tiptap content +
+ * right info panel). Existing query semantics unchanged:
+ *   - Server-side: WHERE id = {uuid} AND status = 'PUBLISHED'.
+ *   - Non-PUBLISHED or nonexistent → notFound() (FR-042: no status/existence leak).
+ *   - Malformed UUID → notFound() before DB query.
  *
  * NO authentication required (PERM-001).
  */
@@ -51,12 +54,14 @@ export default async function PublicDetailPage({
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="mx-auto max-w-public-content px-4 py-8 sm:px-6">
+      {/* Back link */}
       <Link
         href="/"
-        className="mb-4 inline-block text-sm text-blue-600 hover:text-blue-800"
+        className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-brand-primary transition-colors duration-fast hover:text-brand-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
       >
-        ← Retour aux offres
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+        Retour aux offres
       </Link>
       <OfferDetail offer={offer} />
     </div>
