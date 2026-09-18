@@ -31,10 +31,69 @@ export type OfferMutationResult =
 function parseDescription(value: string | null | undefined): unknown {
   if (!value) return null;
   try {
-    return JSON.parse(value);
+    const parsed = JSON.parse(value);
+    return normalizeTiptapDoc(parsed);
   } catch {
     return null;
   }
+}
+
+/**
+ * Normalize Tiptap document: split paragraphs containing hardBreak nodes
+ * into separate paragraph nodes. This fixes the common case where pasted
+ * multi-line plain text is stored as one paragraph with <br> (hardBreak)
+ * nodes instead of proper separate paragraphs.
+ *
+ * Only affects paragraph nodes with hardBreak in their content.
+ * Leaves properly structured docs (multiple paragraphs, headings, lists)
+ * unchanged. Preserves text marks (bold, italic, link).
+ */
+function normalizeTiptapDoc(doc: unknown): unknown {
+  if (!doc || typeof doc !== "object") return doc;
+  const d = doc as { type?: string; content?: unknown[] };
+  if (d.type !== "doc" || !Array.isArray(d.content)) return doc;
+
+  const newContent: unknown[] = [];
+  for (const node of d.content) {
+    const n = node as { type?: string; content?: unknown[] };
+    if (n.type !== "paragraph" || !Array.isArray(n.content)) {
+      newContent.push(node);
+      continue;
+    }
+
+    // Check if this paragraph contains any hardBreak nodes
+    const hasHardBreak = n.content.some(
+      (c) => (c as { type?: string }).type === "hardBreak",
+    );
+    if (!hasHardBreak) {
+      newContent.push(node);
+      continue;
+    }
+
+    // Split the paragraph at hardBreak nodes into separate paragraphs
+    let currentParagraph: { type: string; content: unknown[] } = {
+      type: "paragraph",
+      content: [],
+    };
+    for (const child of n.content) {
+      const c = child as { type?: string };
+      if (c.type === "hardBreak") {
+        // Flush current paragraph if non-empty
+        if (currentParagraph.content.length > 0) {
+          newContent.push(currentParagraph);
+        }
+        currentParagraph = { type: "paragraph", content: [] };
+      } else {
+        currentParagraph.content.push(child);
+      }
+    }
+    // Don't forget the last paragraph
+    if (currentParagraph.content.length > 0) {
+      newContent.push(currentParagraph);
+    }
+  }
+
+  return { ...d, content: newContent };
 }
 
 export async function createOfferAction(
