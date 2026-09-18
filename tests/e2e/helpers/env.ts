@@ -389,6 +389,13 @@ export function buildChildEnv(
     // and the runner use (per §19 remediation — single source of truth).
     BETTER_AUTH_SECRET: authEnv.BETTER_AUTH_SECRET || parentEnv.BETTER_AUTH_SECRET,
     BETTER_AUTH_URL: baseUrl,
+    // Fantomas break-glass session signing key (OPTION A per Fantomas
+    // mini-design). Independent of BETTER_AUTH_SECRET. Used as HMAC-SHA256
+    // key for the self-verifying jourdain_fantomas_session cookie. Required
+    // for the Fantomas break-glass login path; if absent, the Fantomas
+    // login endpoint returns 500 (server misconfiguration) but the rest
+    // of the app (Better Auth admin login, public portal) still works.
+    FANTOMAS_SESSION_SECRET: authEnv.FANTOMAS_SESSION_SECRET || parentEnv.FANTOMAS_SESSION_SECRET,
     // Bootstrap identities
     INITIAL_ADMIN_LOGIN: authEnv.INITIAL_ADMIN_LOGIN || "admin1",
     INITIAL_ADMIN_PASSWORD: authEnv.INITIAL_ADMIN_PASSWORD,

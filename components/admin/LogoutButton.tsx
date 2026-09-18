@@ -3,29 +3,54 @@
 import { useTransition } from "react";
 
 /**
- * LogoutButton — admin logout. Client component that uses the Better Auth
- * client-side signOut method to properly clear the session cookie in the
- * browser. After sign-out, navigates to /admin/login.
+ * LogoutButton — unified admin logout.
  *
- * Per WP-003: the client-side API calls the Better Auth HTTP endpoint
- * (/api/auth/sign-out) which properly sets the Set-Cookie header to
- * clear the session cookie (Max-Age=0). The server-side auth.api.signOut
- * would delete the DB record but might not clear the browser cookie
- * in a Server Action context.
+ * Detects the active session type from the server-rendered `logoutMode`
+ * prop (passed down from app/admin/(protected)/layout.tsx based on
+ * principal.principalType) and routes to the correct logout endpoint:
+ *
+ *   - Fantomas session (principalType === "FANTOMAS") →
+ *     POST /api/fantomas/logout ONLY (clears the Fantomas cookie).
+ *     Per OWNER revision: does NOT call Better Auth on the Fantomas path.
+ *
+ *   - ADMIN session (principalType === "ADMIN") → existing Better Auth
+ *     signOut via authClient.signOut() (calls /api/auth/sign-out).
+ *
+ * If logoutMode is undefined (legacy callers), falls back to Better Auth
+ * signOut for backward compatibility.
  */
 
-export function LogoutButton() {
+export function LogoutButton({
+  logoutMode,
+}: {
+  /**
+   * Server-rendered hint about which logout path to take.
+   * Passed from app/admin/(protected)/layout.tsx based on principal.principalType.
+   * - "FANTOMAS" → POST /api/fantomas/logout
+   * - "ADMIN"   → authClient.signOut()
+   * If undefined, falls back to Better Auth signOut (legacy behavior).
+   */
+  logoutMode?: "FANTOMAS" | "ADMIN";
+}) {
   const [pending, startTransition] = useTransition();
 
   async function handleLogout() {
     try {
-      // Use client-side Better Auth signOut — this calls the HTTP endpoint
-      // which properly clears the session cookie via Set-Cookie header.
-      await import("@/lib/auth-client").then(({ authClient }) =>
-        authClient.signOut(),
-      );
+      if (logoutMode === "FANTOMAS") {
+        // Fantomas logout: POST /api/fantomas/logout — clears the Fantomas
+        // cookie. Does NOT call Better Auth (OWNER revision). Idempotent.
+        await fetch("/api/fantomas/logout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+      } else {
+        // ADMIN logout: existing Better Auth signOut — calls /api/auth/sign-out
+        // which properly clears the Better Auth session cookie via Set-Cookie.
+        const { authClient } = await import("@/lib/auth-client");
+        await authClient.signOut();
+      }
     } catch {
-      // Even if signOut fails, navigate to login
+      // Even if the logout call fails, navigate to login.
     }
     // Full page navigation to ensure cookie state is clean
     window.location.href = "/admin/login";

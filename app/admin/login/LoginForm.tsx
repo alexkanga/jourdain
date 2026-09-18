@@ -2,26 +2,28 @@
 
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { FANTOMAS_USERNAME } from "@/lib/server/auth/fantomas-auth";
 
 /**
  * LoginForm — admin login form (Client Component).
  *
- * Uses the Better Auth client-side API (authClient.signIn.username) to
- * authenticate. The client-side method calls the Better Auth HTTP endpoint
- * (/api/auth/sign-in/username) which properly sets the Set-Cookie header
- * in the browser response. This is the canonical Better Auth + Next.js
- * pattern.
+ * Two server-side auth paths (per Fantomas mini-design, OWNER-authorized):
+ *   - username === "fantomas" → POST /api/fantomas/login (break-glass,
+ *     DB-free, Web Crypto HMAC session cookie `jourdain_fantomas_session`).
+ *   - any other username → Better Auth path via authClient.signIn.username
+ *     (calls /api/auth/sign-in/username, sets `better-auth.session_token`).
  *
- * Authentication itself is permitted before the user has an authenticated
- * session. No circular rule requiring authenticated capability before
- * sign-in. This is a PUBLIC action (no requireCapability).
+ * The username routing decision is client-side. The credential check is
+ * server-side ONLY — no credential comparison happens in client JS. The
+ * "fantomas" username is a public break-glass identity (already shown as
+ * the placeholder in the form); routing on it does not leak secret info.
+ *
+ * On invalid credentials: displays "Identifiants invalides" — no
+ * information leak about which field was wrong (per FR-001 acceptance).
  *
  * Only AFTER successful authentication may an authorized JOURDAIN
  * administrative principal (ADMIN or FANTOMAS) enter the protected admin
  * area. The admin layout guard (getPrincipal) enforces this server-side.
- *
- * On invalid credentials: displays "Identifiants invalides" — no
- * information leak about which field was wrong (per FR-001 acceptance).
  */
 
 export function LoginForm() {
@@ -37,13 +39,33 @@ export function LoginForm() {
     const username = String(formData.get("username") ?? "");
     const password = String(formData.get("password") ?? "");
 
-
     try {
+      // ── Route by username ──────────────────────────────────────────
+      // Fantomas break-glass path: POST to /api/fantomas/login directly.
+      // No credential check client-side — server returns 401 on mismatch.
+      // Use fetch (not authClient) because this is NOT a Better Auth call.
+      if (username === FANTOMAS_USERNAME) {
+        const res = await fetch("/api/fantomas/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password }),
+        });
+        if (!res.ok) {
+          setError("Identifiants invalides");
+          setPending(false);
+          return;
+        }
+        // Login succeeded — Fantomas cookie is set via Set-Cookie header.
+        // Full page navigation so the server reads the new cookie.
+        window.location.href = "/admin/offres";
+        return;
+      }
+
+      // ── Existing Better Auth path ──────────────────────────────────
       const result = await authClient.signIn.username({
         username,
         password,
       });
-
 
       if (result.error) {
         setError("Identifiants invalides");

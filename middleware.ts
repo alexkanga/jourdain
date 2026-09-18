@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
+import { FANTOMAS_COOKIE_NAME } from "@/lib/server/auth/fantomas-auth";
 
 /**
  * Root-level middleware — UX/redirect ONLY.
@@ -12,19 +13,26 @@ import { getSessionCookie } from "better-auth/cookies";
  * INVARIANT: Bypassing middleware MUST NOT grant access to protected data
  * or mutations. The real security authority is server-side:
  * - admin layout guard (app/admin/(protected)/layout.tsx) validates
- *   authenticated session via getPrincipal() (calls Better Auth getSession);
+ *   authenticated session via getPrincipal() (Fantomas-first then Better
+ *   Auth getSession);
  * - every privileged Server Action calls requireCapability() first;
  * - all mutations validate input (Zod) and lifecycle state server-side.
  *
- * This middleware uses Better Auth's official getSessionCookie() helper
- * to check whether a session cookie exists. If absent, redirect to
- * /admin/login. If present, the request proceeds — but the admin layout
- * guard and Server Actions still validate the session server-side.
+ * Two independent session cookies are recognized (presence check only —
+ * signature verification stays server-side in getPrincipal for security):
+ *   - Better Auth: `better-auth.session_token` (HTTP) /
+ *     `__Secure-better-auth.session_token` (HTTPS) — via getSessionCookie().
+ *   - Fantomas: `jourdain_fantomas_session` — read from req.cookies.
  *
- * getSessionCookie() handles both cookie name variants:
- *   - "better-auth.session_token"          (HTTP, local dev/E2E)
- *   - "__Secure-better-auth.session_token"  (HTTPS, Vercel Preview/Production)
- * No manual cookie-name detection or prefix logic is needed.
+ * If either cookie is present, the request proceeds to the admin area.
+ * The admin layout guard + Server Actions still validate the session
+ * server-side (Fantomas HMAC verification or Better Auth getSession).
+ *
+ * getSessionCookie() handles both Better Auth cookie name variants
+ * automatically, handling HTTP (local dev/E2E) and HTTPS (Vercel
+ * Preview/Production). No manual cookie-name detection needed for Better
+ * Auth. The Fantomas cookie has a single name regardless of environment
+ * (Secure attribute is dynamic — but the name itself is constant).
  *
  * Client-side hiding or disabled buttons are UX only and do NOT authorize.
  */
@@ -45,12 +53,12 @@ export function middleware(request: NextRequest) {
   // guard + Server Actions remain the real authority even if this check is
   // bypassed.
   //
-  // getSessionCookie() is Better Auth's official cookie helper. It checks
-  // both "better-auth.session_token" and "__Secure-better-auth.session_token"
-  // automatically, handling HTTP (local) and HTTPS (Vercel) environments.
-  const sessionCookie = getSessionCookie(request);
+  // Edge-safe: both checks are pure cookie existence (no signature
+  // verification — that stays server-side in getPrincipal for security).
+  const betterAuthCookie = getSessionCookie(request);
+  const fantomasCookie = request.cookies.get(FANTOMAS_COOKIE_NAME)?.value;
 
-  if (!sessionCookie) {
+  if (!betterAuthCookie && !fantomasCookie) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/admin/login";
     loginUrl.search = "";
