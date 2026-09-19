@@ -860,10 +860,21 @@ TESTS RUN
 QUALITY GATES
 FUNCTIONAL EVIDENCE
 MIGRATION EVIDENCE (if applicable)
+DATABASE_CHANGE (if persistent DB project)
+DCD_UPDATE_STATUS (if DATABASE_CHANGE = YES)
+DATABASE_CONTRACT_DIVERGENCE (if DATABASE_CHANGE = YES)
 ENVIRONMENT USED
 KNOWN NON-BLOCKING FINDINGS
 KNOWN UNRESOLVED BLOCKERS
 ```
+
+Per S0 §28: if the project uses persistent database storage and the
+work unit changes the database contract, DCD_UPDATE_STATUS must be
+CURRENT (not STALE) and DATABASE_CONTRACT_DIVERGENCE must be NONE (or
+explained). A database-affecting work unit MUST NOT be declared CLOSED
+while DCD is stale or divergence is unexplained.
+
+For non-database changes: DATABASE_CHANGE = NO, DCD fields = N/A.
 
 ---
 

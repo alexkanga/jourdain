@@ -35,11 +35,18 @@ WORKTREE:           CLEAN / DIRTY
 UNTRACKED:          <summary or NONE>
 CANONICAL S0:       FOUND / MISSING at <path>
 PROJECT STATE:      <path and status, if used>
+PERSISTENT_DB:      YES / NO / UNKNOWN
+DCD_STATUS:         CURRENT / STALE / ABSENT / N/A / UNKNOWN
 AUTHORIZED REQUEST:  <one sentence>
 ```
 
 If worktree is dirty and continuity is uncertain, apply the S0 Restart Rule
 (§22): do not perform archaeology by default. Restart from verified remote.
+
+If PERSISTENT_DB = YES and DCD_STATUS = ABSENT or STALE: note it but do
+not block the authorized unit. DCD initialization/update is handled per
+S0 §28 DCD update trigger — at the next database-affecting work unit or
+release preparation.
 
 ---
 

@@ -2644,7 +2644,26 @@ S7 begins only after explicit OWNER GO.
 | Approved baseline commit | `7c85323c557476672a1e227e8773b0fa45459ff4` |
 | Next recommended component | S7 — Project Manifest + ADR |
 
-### 29.1 Quality gate self-check (per S6 §34, revised per OWNER §14 + final patch §5)
+### 29.2 Database Continuity & Reconstruction Dossier (per S0 §28)
+
+This project uses persistent database storage. Per S0 §28, the
+following DCD fields are captured:
+
+| Field | Value |
+|---|---|
+| PERSISTENT_DATABASE | YES |
+| DATABASE_CONTINUITY_REQUIRED | YES |
+| DATABASE_ENGINE | PostgreSQL (Neon serverless) |
+| ORM_OR_QUERY_LAYER | Drizzle ORM (drizzle-orm/neon-http) |
+| MIGRATION_MECHANISM | drizzle-kit (generate + migrate) |
+| CANONICAL_SCHEMA_SOURCE | db/schema.ts |
+| DATABASE_ENVIRONMENTS | Neon main (Production), Neon dev (Preview), Neon test (local/E2E) |
+| BOOTSTRAP_OR_SEED_STRATEGY | Idempotent bootstrap (db/bootstrap/bootstrap.ts) — creates admin1 (SUPER_ADMIN) + DB-backed fantomas (FANTOMAS) |
+| DCD_DIRECTORY | docs/database/ |
+| DCD_INITIALIZATION_STATUS | INITIALIZED |
+| REBUILD_STRATEGY | Empty database → canonical migrations (pnpm db:migrate) → bootstrap (pnpm db:bootstrap) → verification → runtime configuration → deployment |
+
+Reference: S0 §28 for the full DCD doctrine.
 
 | Check | Result |
 |---|---|

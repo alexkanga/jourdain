@@ -275,6 +275,28 @@ All 5 previously-open items are CLOSED in S6 (per OWNER revision §7). No non-bl
 | Project State | `docs/planning/PROJECT_STATE.md` | (living) | — |
 | AISE Manifest | `docs/engineering/AISE_MANIFEST.md` | S3 | `2991df5` |
 | ADRs | `docs/architecture/adr/` | S7 | (this commit) |
+| Database Continuity Dossier | `docs/database/` | S0 §28 | (post-implementation) |
+
+---
+
+## 16.1 Database Continuity & Reconstruction (per S0 §28)
+
+DATABASE_CONTINUITY_REQUIRED = YES. The following Manifest-level
+fields record the persistence architecture decisions:
+
+| Field | Value |
+|---|---|
+| DATABASE_ENGINE | PostgreSQL (Neon serverless) |
+| SCHEMA_SOURCE | db/schema.ts (Drizzle ORM) |
+| MIGRATION_AUTHORITY | db/migrations/ (Drizzle Kit — canonical migration chain) |
+| DCD_DIRECTORY | docs/database/ |
+| DATABASE_ENVIRONMENT_TOPOLOGY | Production → Neon main; Preview → Neon dev; Test → Neon test |
+| BOOTSTRAP_STRATEGY | Idempotent bootstrap (admin1=SUPER_ADMIN + DB-backed fantomas=FANTOMAS) |
+| REBUILD_AUTHORITY | Canonical migrations (pnpm db:migrate) — NOT raw schema dumps |
+
+Detailed schema documentation lives in docs/database/ (DCD), not in
+this Manifest. ADRs cover structural persistence decisions (ADR-0002,
+ADR-0007, ADR-0006) — not individual columns or migrations.
 
 ---
 

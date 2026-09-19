@@ -325,6 +325,18 @@ Where release includes database change verify:
 
 No manual ad-hoc schema edits.
 
+For database-backed projects, per S0 §28, also verify:
+
+- MIGRATION_CHAIN_STATUS: all migrations present and ordered
+- SCHEMA_SOURCE_STATUS: schema source matches migration chain
+- TARGET_DATABASE_STATUS: MATCH / MISMATCH / UNKNOWN / NOT_YET_AVAILABLE
+- DCD_STATUS: CURRENT / STALE / ABSENT
+- DATABASE_CONTRACT_DIVERGENCE: NONE / DETECTED / UNKNOWN
+- REBUILD_RUNBOOK_STATUS: EXISTS / ABSENT / STALE
+
+If Production database does not exist: use NOT_YET_AVAILABLE.
+Do NOT invent Production state.
+
 ---
 
 ## 21. MIGRATION FORWARD COMPATIBILITY

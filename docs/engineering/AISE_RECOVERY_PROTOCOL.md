@@ -124,6 +124,16 @@ MULTI-COMPONENT OPERATIONAL STATE.
 
 Do not declare "the project is broken" when only one subject is affected.
 
+For database-backed projects, verified-state discovery order per S0 §28:
+
+1. Canonical repository state (git)
+2. Canonical migrations (db/migrations/)
+3. Schema source / ORM model (db/schema.ts)
+4. docs/database DCD (docs/database/)
+5. Actual database when authorized and available (read-only inspection)
+
+Never reconstruct database state from conversation memory.
+
 ---
 
 ## 10. RECOVERY SCOPE
