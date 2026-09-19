@@ -1,10 +1,10 @@
 AI SOFTWARE ENGINEERING OS
 ======================================================================
 
-Version: 0.3
+Version: 0.4
 Status: CLOSED / PASS / CANONICAL
 Distribution: UNIVERSAL PORTABLE
-Frozen Rules: §24 CONTRACT PRESERVATION · §25 EXTERNAL PARAMETER GATE · §26 REMOTE RUNTIME COST & QUOTA SAFETY · §27 PRODUCT DELIVERY FIRST & COMPLEXITY BUDGET
+Frozen Rules: §24 CONTRACT PRESERVATION · §25 EXTERNAL PARAMETER GATE · §26 REMOTE RUNTIME COST & QUOTA SAFETY · §27 PRODUCT DELIVERY FIRST & COMPLEXITY BUDGET · §28 DATABASE CONTINUITY & RECONSTRUCTION DOCTRINE
 
 Operational implementation:
   S1 — AISE Universal Launcher → docs/engineering/AISE_UNIVERSAL_LAUNCHER.md
@@ -400,6 +400,10 @@ Schema changes must use the project's canonical migration mechanism.
 Never introduce a competing migration system.
 
 Production DB writes require explicit authorization.
+
+For database-backed projects, maintain a Database Continuity &
+Reconstruction Dossier (DCD) per §28. Database contract changes
+MUST trigger a DCD update before work unit closure.
 
 ======================================================================
 12. GIT DISCIPLINE
@@ -1652,5 +1656,179 @@ These are recommendations, not retroactive blockers to application
 completion.
 
 ======================================================================
-END AI SOFTWARE ENGINEERING OS 0.3
+28. FROZEN DATABASE CONTINUITY & RECONSTRUCTION DOCTRINE
+======================================================================
+
+FROZEN — OWNER-approved universal invariant.
+
+A DATABASE-BACKED PROJECT MUST REMAIN RECONSTRUCTIBLE FROM VERIFIED
+REPOSITORY STATE.
+
+A. CONSTITUTIONAL PRINCIPLE
+
+Never allow the database contract to exist only in:
+  - developer memory
+  - a live cloud database
+  - ORM code alone
+  - undocumented migration history
+
+For every database-backed AISE project, maintain a canonical:
+  DATABASE CONTINUITY & RECONSTRUCTION DOSSIER (DCD)
+
+B. DCD DIRECTORY
+
+Initialize docs/database/ with five mandatory artifacts when the
+project uses persistent database storage:
+
+  1. DATABASE_SCHEMA_REFERENCE.md — full human-readable schema reference
+     (tables, columns, types, nullability, defaults, PK/FK/UNIQUE/CHECK,
+     indexes, enums, relationships, delete/update behavior, ORM mapping,
+     application responsibility). Explicitly distinguish DATABASE-ENFORCED
+     from APPLICATION-ENFORCED business rules.
+
+  2. DATABASE_OBJECT_INVENTORY.md — concise audit-friendly inventory of
+     all database objects (schemas, enums, tables, indexes, constraints,
+     migration tracking objects). Supports rapid VERIFIED STATE discovery.
+
+  3. DATABASE_REBUILD_RUNBOOK.md — canonical reconstruction procedure from
+     EMPTY database. Must use the project's canonical migration mechanism
+     (NOT raw schema dumps). Includes prerequisites, env vars, migration
+     commands, bootstrap/seed requirements, verification checks, deployment
+     binding, STOP conditions. No real secrets.
+
+  4. DATABASE_ENVIRONMENT_AUDIT.md — factual database-state audits per
+     environment (DEV/TEST/STAGING/PRODUCTION). Before an environment exists:
+     mark NOT YET AVAILABLE. After Production exists: perform read-only
+     comparison between schema source, migration chain, and actual deployed
+     database. Record: environment, date, application commit, migrations
+     applied, object consistency, unexplained mismatches, final status.
+
+  5. DATABASE_SCHEMA.json — machine-readable structural representation
+     (schemas, enums, tables, columns, indexes, FKs, unique constraints,
+     checks, migrations). NEVER include real user records, passwords,
+     hashes, tokens, sessions, connection strings, or secrets.
+
+Projects MAY prefix filenames with the project name.
+
+C. SOURCE OF TRUTH ORDER
+
+  1. CANONICAL MIGRATIONS — executable database evolution/reconstruction
+  2. SCHEMA SOURCE / ORM MODEL — canonical application-side schema model
+  3. ACTUAL DEPLOYED DATABASE — factual runtime state
+  4. docs/database/* — descriptive/recovery documentation
+
+If sources disagree: declare DATABASE CONTRACT DIVERGENCE. Then
+investigate. NEVER UNKNOWN → DOCUMENT AS FACT.
+
+D. DCD CREATION TRIGGER
+
+When S6 determines the project uses persistent database storage:
+  DATABASE_CONTINUITY_REQUIRED = YES
+
+Initialize docs/database/ during the earliest appropriate implementation
+stage. Do not wait until Production release.
+
+E. DCD UPDATE TRIGGER
+
+Any authorized work unit that changes the persistent database contract
+MUST trigger a DCD impact review:
+
+  DATABASE_CHANGE = YES → DCD_UPDATE_REQUIRED = YES
+
+Examples: table/column/index/enum/constraint creation/removal/change,
+migration creation, bootstrap contract change, persisted role/principal
+model change, ORM change, DB engine change, environment topology change,
+rebuild process change.
+
+Non-database changes (UI, copy, static images, pure frontend refactor):
+  DATABASE_CHANGE = NO → DCD_UPDATE_REQUIRED = NO
+
+F. WORK UNIT CLOSURE RULE
+
+For every database-affecting work unit, closure evidence must include:
+
+  DATABASE_CHANGE: YES/NO
+  MIGRATION_STATUS:
+  SCHEMA_SOURCE_STATUS:
+  DCD_UPDATE_STATUS:
+  DATABASE_CONTRACT_DIVERGENCE: NONE/<description>
+
+A database-affecting work unit MUST NOT be declared CLOSED while:
+  DCD_UPDATE_STATUS = STALE
+  or DATABASE_CONTRACT_DIVERGENCE remains unexplained.
+
+G. DEVELOPMENT LOOP INTEGRATION
+
+For database-affecting implementation, the AISE loop becomes:
+
+  UNDERSTAND VERIFIED STATE
+  → DESIGN MINIMAL CHANGE
+  → IMPLEMENT
+  → CREATE/UPDATE MIGRATION
+  → TEST
+  → VERIFY SCHEMA CONTRACT
+  → UPDATE DCD
+  → QUALITY GATES
+  → INTEGRATE
+
+Documentation follows VERIFIED implementation. Do not create documentation
+before knowing actual implementation state.
+
+H. RELEASE INTEGRATION
+
+Before Production release of a database-backed project, verify:
+  migration chain ↔ schema source ↔ target database ↔ DCD
+
+Classify each pair: MATCH / MISMATCH / UNKNOWN.
+
+After Production exists, a read-only Production schema audit SHOULD
+become part of release closure when practical and authorized.
+
+I. REBUILD PRINCIPLE
+
+The primary reconstruction path:
+  EMPTY DATABASE → canonical migrations → bootstrap/seed → verification
+  → runtime configuration → deployment
+
+Schema dumps MAY exist as supplementary forensic references. They MUST
+NOT silently replace canonical migrations unless the project's approved
+architecture explicitly uses dumps as the migration/rebuild system.
+
+J. DATA BACKUP IS SEPARATE
+
+DCD documents STRUCTURE + RECONSTRUCTION CONTRACT. It does NOT
+constitute DATA BACKUP. Schema reconstruction and data restoration are
+separate concerns. Do not export sensitive Production data merely to
+satisfy DCD.
+
+K. SECURITY
+
+DCD MUST NEVER contain real: database passwords, URLs with embedded
+credentials, auth secrets, API tokens, password hashes, session tokens,
+private keys. Use variable names/placeholders only.
+
+L. PORTABILITY
+
+The DCD doctrine works with PostgreSQL, MySQL, SQLite, SQL Server,
+document databases, and other persistent stores. Adapt object
+categories to the actual technology. Do not force PostgreSQL concepts
+onto non-PostgreSQL projects.
+
+M. LEGACY / EXISTING PROJECTS
+
+For an existing AISE project that already has a DB but no DCD:
+  Do not block all development.
+  At the next database-affecting unit or release preparation:
+  initialize DCD from VERIFIED STATE.
+  Classify unavailable deployed environments as UNKNOWN or NOT YET
+  AVAILABLE.
+
+N. REFERENCE IMPLEMENTATION
+
+JOURDAIN EMPLOI serves as the reference example. Its canonical dossier
+lives in docs/database/. Do NOT hard-code JOURDAIN-specific tables,
+enums, roles, or Neon into generic AISE doctrine.
+
+======================================================================
+END AI SOFTWARE ENGINEERING OS 0.4
 ======================================================================
