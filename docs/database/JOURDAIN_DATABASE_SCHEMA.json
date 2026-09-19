@@ -1,0 +1,302 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "jourdain/database/JOURDAIN_DATABASE_SCHEMA.json",
+  "document_type": "database_schema_structure",
+  "note": "Structure only. No application data is contained in this file.",
+
+  "application": {
+    "name": "JOURDAIN EMPLOI",
+    "version": "V1",
+    "production_url": "https://jourdain-three.vercel.app",
+    "host": "Neon Postgres",
+    "branch": "main"
+  },
+
+  "schema_version_commit": "eac879f9efb6092db43da42888b32dafc2f37a22",
+
+  "audit": {
+    "date": "2026-09-19",
+    "method": "read-only SELECT against information_schema / pg_catalog",
+    "result": "MATCH",
+    "divergence": "none"
+  },
+
+  "schemas": [
+    { "name": "public", "purpose": "application tables and enums", "object_count": 8 },
+    { "name": "drizzle", "purpose": "drizzle migration tracking", "object_count": 1 }
+  ],
+
+  "extensions": [
+    { "name": "plpgsql", "default": true }
+  ],
+
+  "migrations": [
+    { "id": 1, "schema": "drizzle", "table": "__drizzle_migrations", "hash": null, "created_at": null },
+    { "id": 2, "schema": "drizzle", "table": "__drizzle_migrations", "hash": null, "created_at": null },
+    { "id": 3, "schema": "drizzle", "table": "__drizzle_migrations", "hash": null, "created_at": null }
+  ],
+
+  "enums": {
+    "offer_status": {
+      "schema": "public",
+      "values": ["DRAFT", "PUBLISHED", "SUSPENDED", "ARCHIVED"],
+      "used_by": [
+        { "table": "offers", "column": "status" }
+      ]
+    },
+    "principal_type": {
+      "schema": "public",
+      "values": ["ADMIN", "SUPER_ADMIN", "FANTOMAS"],
+      "used_by": [
+        { "table": "user", "column": "principal_type" }
+      ]
+    }
+  },
+
+  "tables": {
+    "account": {
+      "schema": "public",
+      "column_count": 13,
+      "managed_by": "better-auth",
+      "columns": [
+        { "name": "id", "type": "text", "nullable": false, "default": null, "pk": true, "fk": null, "unique": false },
+        { "name": "account_id", "type": "text", "nullable": false, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "provider_id", "type": "text", "nullable": false, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "user_id", "type": "text", "nullable": false, "default": null, "pk": false, "fk": { "references_table": "user", "references_column": "id", "on_delete": "CASCADE", "on_update": "NO ACTION" }, "unique": false },
+        { "name": "access_token", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "refresh_token", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "access_token_expires_at", "type": "timestamptz", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "refresh_token_expires_at", "type": "timestamptz", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "scope", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "id_token", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "session_state", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "created_at", "type": "timestamptz", "nullable": false, "default": "now()", "pk": false, "fk": null, "unique": false },
+        { "name": "updated_at", "type": "timestamptz", "nullable": false, "default": "now()", "pk": false, "fk": null, "unique": false }
+      ]
+    },
+
+    "session": {
+      "schema": "public",
+      "column_count": 9,
+      "managed_by": "better-auth",
+      "columns": [
+        { "name": "id", "type": "text", "nullable": false, "default": null, "pk": true, "fk": null, "unique": false },
+        { "name": "token", "type": "text", "nullable": false, "default": null, "pk": false, "fk": null, "unique": true, "unique_constraint": "session_token_unique" },
+        { "name": "expires_at", "type": "timestamptz", "nullable": false, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "ip_address", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "user_agent", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "user_id", "type": "text", "nullable": false, "default": null, "pk": false, "fk": { "references_table": "user", "references_column": "id", "on_delete": "CASCADE", "on_update": "NO ACTION" }, "unique": false },
+        { "name": "created_at", "type": "timestamptz", "nullable": false, "default": "now()", "pk": false, "fk": null, "unique": false },
+        { "name": "updated_at", "type": "timestamptz", "nullable": false, "default": "now()", "pk": false, "fk": null, "unique": false },
+        { "name": "impersonated_from", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false }
+      ]
+    },
+
+    "user": {
+      "schema": "public",
+      "column_count": 14,
+      "managed_by": "better-auth+jourdain",
+      "columns": [
+        { "name": "id", "type": "text", "nullable": false, "default": null, "pk": true, "fk": null, "unique": false },
+        { "name": "name", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "email", "type": "text", "nullable": false, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "email_verified", "type": "boolean", "nullable": false, "default": "false", "pk": false, "fk": null, "unique": false },
+        { "name": "image", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "username", "type": "text", "nullable": false, "default": null, "pk": false, "fk": null, "unique": true, "unique_constraint": "user_username_unique" },
+        { "name": "principal_type", "type": "principal_type", "nullable": false, "default": "'ADMIN'", "pk": false, "fk": null, "unique": false },
+        { "name": "role", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "banned", "type": "boolean", "nullable": false, "default": "false", "pk": false, "fk": null, "unique": false },
+        { "name": "ban_reason", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "ban_expires", "type": "timestamptz", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "last_sign_in_at", "type": "timestamptz", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "created_at", "type": "timestamptz", "nullable": false, "default": "now()", "pk": false, "fk": null, "unique": false },
+        { "name": "updated_at", "type": "timestamptz", "nullable": false, "default": "now()", "pk": false, "fk": null, "unique": false }
+      ]
+    },
+
+    "verification": {
+      "schema": "public",
+      "column_count": 6,
+      "managed_by": "better-auth",
+      "columns": [
+        { "name": "id", "type": "text", "nullable": false, "default": null, "pk": true, "fk": null, "unique": false },
+        { "name": "identifier", "type": "text", "nullable": false, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "value", "type": "text", "nullable": false, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "expires_at", "type": "timestamptz", "nullable": false, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "created_at", "type": "timestamptz", "nullable": false, "default": "now()", "pk": false, "fk": null, "unique": false },
+        { "name": "updated_at", "type": "timestamptz", "nullable": false, "default": "now()", "pk": false, "fk": null, "unique": false }
+      ]
+    },
+
+    "rateLimit": {
+      "schema": "public",
+      "column_count": 4,
+      "managed_by": "better-auth-rate-limit",
+      "columns": [
+        { "name": "key", "type": "text", "nullable": false, "default": null, "pk": true, "fk": null, "unique": false },
+        { "name": "count", "type": "integer", "nullable": false, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "last_request", "type": "bigint", "nullable": false, "default": "0", "pk": false, "fk": null, "unique": false },
+        { "name": "expires_at", "type": "timestamptz", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false }
+      ]
+    },
+
+    "offers": {
+      "schema": "public",
+      "column_count": 21,
+      "managed_by": "jourdain-application",
+      "columns": [
+        { "name": "id", "type": "uuid", "nullable": false, "default": "gen_random_uuid()", "pk": true, "fk": null, "unique": false },
+        { "name": "slug", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "title", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "summary", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "description", "type": "jsonb", "nullable": false, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "status", "type": "offer_status", "nullable": false, "default": "'DRAFT'", "pk": false, "fk": null, "unique": false },
+        { "name": "location", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "contract_type", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "work_mode", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "experience_level", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "salary_min", "type": "integer", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "salary_max", "type": "integer", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "salary_currency", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "published_at", "type": "timestamptz", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "starts_at", "type": "timestamptz", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "expires_at", "type": "timestamptz", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "created_by", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "updated_by", "type": "text", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "version", "type": "integer", "nullable": true, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "created_at", "type": "timestamptz", "nullable": false, "default": "now()", "pk": false, "fk": null, "unique": false },
+        { "name": "updated_at", "type": "timestamptz", "nullable": false, "default": "now()", "pk": false, "fk": null, "unique": false }
+      ]
+    },
+
+    "__drizzle_migrations": {
+      "schema": "drizzle",
+      "column_count": 3,
+      "managed_by": "drizzle-kit",
+      "record_count": 3,
+      "columns": [
+        { "name": "id", "type": "serial", "nullable": false, "default": "nextval(...)", "pk": true, "fk": null, "unique": false },
+        { "name": "hash", "type": "text", "nullable": false, "default": null, "pk": false, "fk": null, "unique": false },
+        { "name": "created_at", "type": "bigint", "nullable": false, "default": null, "pk": false, "fk": null, "unique": false }
+      ]
+    }
+  },
+
+  "indexes": [
+    { "name": "account_pkey", "schema": "public", "table": "account", "columns": ["id"], "unique": true, "type": "btree", "origin": "primary_key" },
+    { "name": "offers_pkey", "schema": "public", "table": "offers", "columns": ["id"], "unique": true, "type": "btree", "origin": "primary_key" },
+    { "name": "idx_offers_status", "schema": "public", "table": "offers", "columns": ["status"], "unique": false, "type": "btree", "origin": "explicit" },
+    { "name": "idx_offers_created_at_desc", "schema": "public", "table": "offers", "columns": ["created_at"], "order": "DESC", "unique": false, "type": "btree", "origin": "explicit" },
+    { "name": "rateLimit_pkey", "schema": "public", "table": "rateLimit", "columns": ["key"], "unique": true, "type": "btree", "origin": "primary_key" },
+    { "name": "session_pkey", "schema": "public", "table": "session", "columns": ["id"], "unique": true, "type": "btree", "origin": "primary_key" },
+    { "name": "session_token_unique", "schema": "public", "table": "session", "columns": ["token"], "unique": true, "type": "btree", "origin": "unique_constraint" },
+    { "name": "user_pkey", "schema": "public", "table": "user", "columns": ["id"], "unique": true, "type": "btree", "origin": "primary_key" },
+    { "name": "user_username_unique", "schema": "public", "table": "user", "columns": ["username"], "unique": true, "type": "btree", "origin": "unique_constraint" },
+    { "name": "verification_pkey", "schema": "public", "table": "verification", "columns": ["id"], "unique": true, "type": "btree", "origin": "primary_key" }
+  ],
+
+  "primary_keys": [
+    { "name": "account_pkey", "schema": "public", "table": "account", "columns": ["id"] },
+    { "name": "offers_pkey", "schema": "public", "table": "offers", "columns": ["id"] },
+    { "name": "rateLimit_pkey", "schema": "public", "table": "rateLimit", "columns": ["key"] },
+    { "name": "session_pkey", "schema": "public", "table": "session", "columns": ["id"] },
+    { "name": "user_pkey", "schema": "public", "table": "user", "columns": ["id"] },
+    { "name": "verification_pkey", "schema": "public", "table": "verification", "columns": ["id"] }
+  ],
+
+  "foreign_keys": [
+    {
+      "name": "account_user_id_user_id_fk",
+      "schema": "public",
+      "table": "account",
+      "columns": ["user_id"],
+      "references_table": "user",
+      "references_schema": "public",
+      "references_columns": ["id"],
+      "on_delete": "CASCADE",
+      "on_update": "NO ACTION"
+    },
+    {
+      "name": "session_user_id_user_id_fk",
+      "schema": "public",
+      "table": "session",
+      "columns": ["user_id"],
+      "references_table": "user",
+      "references_schema": "public",
+      "references_columns": ["id"],
+      "on_delete": "CASCADE",
+      "on_update": "NO ACTION"
+    }
+  ],
+
+  "unique_constraints": [
+    { "name": "session_token_unique", "schema": "public", "table": "session", "columns": ["token"] },
+    { "name": "user_username_unique", "schema": "public", "table": "user", "columns": ["username"] }
+  ],
+
+  "check_constraints": [
+    { "table": "account", "column": "id", "kind": "NOT_NULL" },
+    { "table": "account", "column": "account_id", "kind": "NOT_NULL" },
+    { "table": "account", "column": "provider_id", "kind": "NOT_NULL" },
+    { "table": "account", "column": "user_id", "kind": "NOT_NULL" },
+    { "table": "account", "column": "created_at", "kind": "NOT_NULL" },
+    { "table": "account", "column": "updated_at", "kind": "NOT_NULL" },
+    { "table": "session", "column": "id", "kind": "NOT_NULL" },
+    { "table": "session", "column": "token", "kind": "NOT_NULL" },
+    { "table": "session", "column": "expires_at", "kind": "NOT_NULL" },
+    { "table": "session", "column": "user_id", "kind": "NOT_NULL" },
+    { "table": "session", "column": "created_at", "kind": "NOT_NULL" },
+    { "table": "session", "column": "updated_at", "kind": "NOT_NULL" },
+    { "table": "user", "column": "id", "kind": "NOT_NULL" },
+    { "table": "user", "column": "email", "kind": "NOT_NULL" },
+    { "table": "user", "column": "email_verified", "kind": "NOT_NULL" },
+    { "table": "user", "column": "username", "kind": "NOT_NULL" },
+    { "table": "user", "column": "principal_type", "kind": "NOT_NULL" },
+    { "table": "user", "column": "banned", "kind": "NOT_NULL" },
+    { "table": "user", "column": "created_at", "kind": "NOT_NULL" },
+    { "table": "user", "column": "updated_at", "kind": "NOT_NULL" },
+    { "table": "verification", "column": "id", "kind": "NOT_NULL" },
+    { "table": "verification", "column": "identifier", "kind": "NOT_NULL" },
+    { "table": "verification", "column": "value", "kind": "NOT_NULL" },
+    { "table": "verification", "column": "expires_at", "kind": "NOT_NULL" },
+    { "table": "verification", "column": "created_at", "kind": "NOT_NULL" },
+    { "table": "verification", "column": "updated_at", "kind": "NOT_NULL" },
+    { "table": "rateLimit", "column": "key", "kind": "NOT_NULL" },
+    { "table": "rateLimit", "column": "count", "kind": "NOT_NULL" },
+    { "table": "rateLimit", "column": "last_request", "kind": "NOT_NULL" },
+    { "table": "offers", "column": "id", "kind": "NOT_NULL" },
+    { "table": "offers", "column": "description", "kind": "NOT_NULL" },
+    { "table": "offers", "column": "status", "kind": "NOT_NULL" },
+    { "table": "offers", "column": "created_at", "kind": "NOT_NULL" },
+    { "table": "offers", "column": "updated_at", "kind": "NOT_NULL" }
+  ],
+
+  "check_constraints_summary": {
+    "total": 34,
+    "all_are_not_null_enforcement": true,
+    "business_rule_checks": 0,
+    "per_table": {
+      "account": 6,
+      "session": 6,
+      "user": 8,
+      "verification": 6,
+      "rateLimit": 3,
+      "offers": 5
+    }
+  },
+
+  "totals": {
+    "schemas": 2,
+    "extensions": 1,
+    "enums": 2,
+    "application_tables": 6,
+    "tracking_tables": 1,
+    "application_columns": 67,
+    "indexes": 10,
+    "primary_keys": 6,
+    "foreign_keys": 2,
+    "unique_constraints": 2,
+    "check_constraints": 34,
+    "migration_records": 3
+  }
+}
